@@ -2,9 +2,7 @@
 
 Pick outdated Homebrew formulae and casks from an `fzf` menu, then upgrade or uninstall them.
 
-A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies
-beneath it; a cask node is just the outdated cask. Everything starts selected. Keys are shown in
-the `fzf` header.
+A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask node is just the outdated cask. Everything starts selected. Keys are shown in the `fzf` header.
 
 ## Install
 
