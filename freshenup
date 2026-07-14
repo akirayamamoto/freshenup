@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# brew-pick — pick outdated Homebrew nodes (formulae + casks) and, optionally, outdated Mac
+# freshenup — pick outdated Homebrew nodes (formulae + casks) and, optionally, outdated Mac
 # App Store apps, then act on them. A formula node is a leaf that is outdated itself or has
 # outdated deps beneath it; a cask or App Store app is a standalone node. Everything starts
 # selected. Keys are shown in the fzf header (single source of truth). Updating names the

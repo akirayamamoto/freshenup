@@ -1,20 +1,20 @@
-# brew-pick
+# freshenup
 
-Pick outdated Homebrew formulae and casks from an `fzf` menu, then upgrade or uninstall them.
+Pick outdated Homebrew formulae and casks — and, optionally, outdated Mac App Store apps — from an `fzf` menu, then upgrade or uninstall them.
 
-A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask node is just the outdated cask. Everything starts selected. Keys are shown in the `fzf` header.
+A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask or App Store app is a standalone node. Everything starts selected. Keys are shown in the `fzf` header. App Store rows show a slugified name; the numeric id drives the action via `mas` (which needs root, so a `sudo` prompt appears only when an App Store row is selected).
 
 ## Install
 
 ```bash
-brew install akirayamamoto/tap/brew-pick
+brew install akirayamamoto/tap/freshenup
 ```
 
 ## Usage
 
 ```bash
-brew-pick          # scan and pick
-brew-pick -u       # force `brew update` first (brew otherwise auto-refreshes at most once/24h)
+freshenup          # scan and pick
+freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at most once/24h)
 ```
 
 - **enter** — upgrade the selected nodes
@@ -26,6 +26,7 @@ brew-pick -u       # force `brew update` first (brew otherwise auto-refreshes at
 
 - [`fzf`](https://github.com/junegunn/fzf) (installed automatically via Homebrew)
 - Homebrew, plus standard `awk`/`comm` (present on macOS)
+- Optional: [`mas`](https://github.com/mas-cli/mas) for Mac App Store support (detected at runtime)
 
 ## License
 
