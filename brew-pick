@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# brew-pick — pick outdated Homebrew nodes (top-level formulae + casks) and act on them.
-# A formula node is a leaf that is outdated itself or has outdated deps beneath it; a cask
-# node is just the outdated cask. Everything starts selected. Keys are shown in the fzf
-# header (single source of truth). Updating names the outdated deps directly — `brew upgrade
-# mpv` is a no-op when mpv is current, so it wouldn't pull an outdated dep along.
+# brew-pick — pick outdated Homebrew nodes (formulae + casks) and, optionally, outdated Mac
+# App Store apps, then act on them. A formula node is a leaf that is outdated itself or has
+# outdated deps beneath it; a cask or App Store app is a standalone node. Everything starts
+# selected. Keys are shown in the fzf header (single source of truth). Updating names the
+# outdated deps directly — `brew upgrade mpv` is a no-op when mpv is current, so it wouldn't
+# pull an outdated dep along. App Store rows show a slugified name; the numeric id drives the
+# action (upgrade/uninstall via `mas`, which needs root — a sudo prompt appears only then).
 # Flag: -u/--update force `brew update` now (brew otherwise auto-refreshes at most once/24h).
-# Deps: fzf, brew, coreutils(comm), awk. No config, no state.
+# Deps: fzf, brew, coreutils(comm), awk. Optional: mas (Mac App Store). No config, no state.
 set -euo pipefail
 
 # Preview mode (re-invoked by fzf per row): the node's outdated members + version bumps.
 # Payload columns: type <TAB> node <TAB> member <TAB> "current → latest".
 if [ "${1:-}" = "--preview" ]; then
   awk -F'\t' -v n="${2:-}" '
-    $2 == n { if ($3 == n) self = $4; else deps = deps sprintf("  %-22s %s\n", $3, $4) }
-    END { print (self == "") ? n : n "  " self; printf "%s", deps }' \
+    $2 == n { typ = $1
+      if ($3 == n || $1 == "mas") self = $4; else deps = deps sprintf("  %-22s %s\n", $3, $4) }
+    END {
+      lab["cask"] = "  (cask)"; lab["mas"] = "  (App Store)"; lab["formula"] = "  (formula)"
+      print (self == "") ? n lab[typ] : n "  " self lab[typ]; printf "%s", deps }' \
     "${BREWTOP_PAYLOAD:-/dev/null}"
   exit 0
 fi
@@ -26,13 +31,17 @@ if [ "${1:-}" = "-u" ] || [ "${1:-}" = "--update" ]; then
   echo "Refreshing Homebrew…" >&2; brew update >/dev/null
 fi
 
-echo "Scanning for outdated formulae and casks…" >&2
-of="$(mktemp)"; oc="$(mktemp)"; lf="$(mktemp)"; vmap="$(mktemp)"; payload="$(mktemp)"
-trap 'rm -f "$of" "$oc" "$lf" "$vmap" "$payload"' EXIT
+of="$(mktemp)"; oc="$(mktemp)"; lf="$(mktemp)"; vmap="$(mktemp)"; payload="$(mktemp)"; om="$(mktemp)"
+trap 'rm -f "$of" "$oc" "$lf" "$vmap" "$payload" "$om"' EXIT
+has_mas=""; command -v mas >/dev/null 2>&1 && has_mas=1
+msg="Scanning for outdated formulae and casks"
+[ -n "$has_mas" ] && msg="Scanning for outdated formulae, casks, and App Store apps"
+echo "${msg}…" >&2
 # brew's per-call startup is ~2.5s, so run the independent lookups concurrently.
 brew outdated --formula --verbose >"$of" 2>/dev/null &
 brew outdated --cask --verbose >"$oc" 2>/dev/null &
 brew leaves --installed-on-request | sort >"$lf" 2>/dev/null &
+[ -n "$has_mas" ] && mas outdated --json >"$om" 2>/dev/null &
 wait
 
 # Version map "name<TAB>current → latest" from "name (…, current) < latest" (formulae)
@@ -84,6 +93,22 @@ while read -r c; do
   printf 'cask\t%s\t%s\t%s\n' "$c" "$c" "$(awk -F'\t' -v n="$c" '$1==n{print $2}' "$vmap")"
 done <<<"$casks" >> "$payload"
 
+# Each outdated Mac App Store app is a standalone self node: display a slugified name + the
+# last 3 id digits (keeps rows visually brew-like and near-unique); the numeric id in the
+# member slot is what `mas` acts on. JSON fields are order-independent, so match each.
+if [ -s "$om" ]; then
+  awk '
+    { id=""; name=""; cur=""; new=""
+      if (match($0, /"adamID":[0-9]+/))       id   = substr($0, RSTART+9,  RLENGTH-9)
+      if (match($0, /"name":"[^"]*"/))        name = substr($0, RSTART+8,  RLENGTH-9)
+      if (match($0, /"version":"[^"]*"/))     cur  = substr($0, RSTART+11, RLENGTH-12)
+      if (match($0, /"newVersion":"[^"]*"/))  new  = substr($0, RSTART+14, RLENGTH-15)
+      if (id == "" || name == "") next
+      s = tolower(name); gsub(/[^a-z0-9]+/, "-", s); gsub(/^-+|-+$/, "", s)
+      printf "mas\t%s-%s\t%s\t%s\n", s, substr(id, length(id)-2), id, (cur == "" ? new : cur " → " new)
+    }' "$om" >> "$payload"
+fi
+
 [ ! -s "$payload" ] && { echo "Nothing outdated."; exit 0; }
 export BREWTOP_PAYLOAD="$payload"
 
@@ -106,26 +131,37 @@ if [ "$(head -1 <<<"$sel")" = "%%UNINSTALL%%" ]; then
   printf 'Uninstall %s (%s)? [y/N] ' "$n" "$t" > /dev/tty
   read -r ans < /dev/tty || ans=""
   case "$ans" in
-    y|Y) if [ "$t" = cask ]; then brew uninstall --cask "$n" || true
-         else { brew uninstall --formula "$n" && brew autoremove; } || true; fi ;;
+    y|Y) case "$t" in
+           cask) brew uninstall --cask "$n" || true ;;
+           mas)  mid="$(awk -F'\t' -v n="$n" '$1=="mas" && $2==n {print $3; exit}' "$payload")"
+                 { [ -n "$mid" ] && sudo mas uninstall "$mid"; } || true ;;
+           *)    { brew uninstall --formula "$n" && brew autoremove; } || true ;;
+         esac ;;
     *) echo "  skipped $n" > /dev/tty ;;
   esac
 else
   # Update: gather selected nodes' outdated members, split by type, upgrade in one call each.
   nodes="$sel"
-  fpkgs=""; cpkgs=""
+  fpkgs=""; cpkgs=""; mpkgs=""
   while read -r n; do
     [ -z "$n" ] && continue
     while IFS=$'\t' read -r t m; do
       [ -z "$m" ] && continue
-      if [ "$t" = cask ]; then cpkgs="$cpkgs$m"$'\n'; else fpkgs="$fpkgs$m"$'\n'; fi
+      case "$t" in
+        cask) cpkgs="$cpkgs$m"$'\n' ;;
+        mas)  mpkgs="$mpkgs$m"$'\n' ;;
+        *)    fpkgs="$fpkgs$m"$'\n' ;;
+      esac
     done < <(awk -F'\t' -v n="$n" '$2==n { print $1 "\t" $3 }' "$payload")
   done <<<"$nodes"
   fpkgs="$(printf '%s' "$fpkgs" | sed '/^$/d' | sort -u)"
   cpkgs="$(printf '%s' "$cpkgs" | sed '/^$/d' | sort -u)"
+  mpkgs="$(printf '%s' "$mpkgs" | sed '/^$/d' | sort -u)"
   # shellcheck disable=SC2086
   [ -n "$fpkgs" ] && brew upgrade --formula $fpkgs
   # shellcheck disable=SC2086
   [ -n "$cpkgs" ] && brew upgrade --cask $cpkgs
+  # shellcheck disable=SC2086
+  [ -n "$mpkgs" ] && sudo mas upgrade $mpkgs
   true
 fi
