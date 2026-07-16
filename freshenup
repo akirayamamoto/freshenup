@@ -45,14 +45,17 @@ brew leaves --installed-on-request | sort >"$lf" 2>/dev/null &
 wait
 
 # Version map "name<TAB>current → latest" from "name (…, current) < latest" (formulae)
-# and "name (current,checksum) != latest,checksum" (casks); strip the trailing ,checksum.
+# and "name (version) != version" (casks). A cask version's comma-suffix is part of the
+# version — keep it (e.g. dotnet 8.0.422,8.0.28) and only strip a trailing build hash.
+# ponytail: "16+ hex chars" is the hash heuristic; tighten to require an a–f digit if a real
+# version ever gets truncated.
 awk '{
   i = index($0, " ("); if (i == 0) next
   name = substr($0, 1, i-1); rest = substr($0, i+2)
   j = index(rest, ")"); inside = substr(rest, 1, j-1); after = substr(rest, j+1)
   sub(/^ *(<|!=) */, "", after)
   m = split(inside, a, ", "); cur = a[m]
-  sub(/,.*/, "", cur); sub(/,.*/, "", after)
+  sub(/,[0-9a-fA-F]{16,}$/, "", cur); sub(/,[0-9a-fA-F]{16,}$/, "", after)
   printf "%s\t%s → %s\n", name, cur, after
 }' "$of" "$oc" > "$vmap"
 
