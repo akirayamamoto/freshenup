@@ -85,15 +85,32 @@ pending="$(build | awk -F'\t' '
 ')"
 
 # Payload: type <TAB> node <TAB> member <TAB> "current → latest".
-# Formula nodes expand to their outdated members; each cask is a standalone self node.
+# Formula nodes expand to their outdated members; casks collapse under a depends_on parent.
 awk -F'\t' '
   NR==FNR { ver[$1]=$2; next }
   { if ($2=="●") print "formula\t" $1 "\t" $1 "\t" ver[$1]
     c=split($3,a," "); for (i=1;i<=c;i++) if (a[i]!="") print "formula\t" $1 "\t" a[i] "\t" ver[a[i]] }
 ' "$vmap" <(printf '%s\n' "$pending") > "$payload"
+# Fold an outdated cask under an outdated cask that depends on it (e.g. dotnet-sdk8 →
+# dotnet-sdk8-0-400) so a wrapper and its version band show as one node, like formula deps
+# under their leaf. Deps come from each cask's install receipt (runtime_dependencies) — a
+# ~1KB local read, no brew calls. ponytail: one dep level, covers the wrapper pattern.
+caskroom="${HOMEBREW_PREFIX:-$(dirname "$(dirname "$(command -v brew)")")}/Caskroom"
+cver() { awk -F'\t' -v n="$1" '$1==n{print $2}' "$vmap"; }
+cdeps="$(while read -r c; do
+  [ -z "$c" ] && continue
+  awk -F'"' '/"full_name":/ { d = $4; sub(/.*\//, "", d); print c "\t" d }' \
+    c="$c" "$caskroom/$c/.metadata/INSTALL_RECEIPT.json" 2>/dev/null
+done <<<"$casks")"                                          # parent<TAB>dep
+folded="$(printf '%s\n' "$cdeps" | awk -F'\t' 'NF==2{print $2}' | sort -u \
+         | comm -12 - <(printf '%s\n' "$casks" | sort -u))" # outdated casks shown under a parent
 while read -r c; do
   [ -z "$c" ] && continue
-  printf 'cask\t%s\t%s\t%s\n' "$c" "$c" "$(awk -F'\t' -v n="$c" '$1==n{print $2}' "$vmap")"
+  printf '%s\n' "$folded" | grep -qxF "$c" && continue      # this cask folds under a parent
+  printf 'cask\t%s\t%s\t%s\n' "$c" "$c" "$(cver "$c")"      # top-level node (self row)
+  printf '%s\n' "$cdeps" | awk -F'\t' -v c="$c" '$1==c{print $2}' | while read -r d; do
+    printf '%s\n' "$folded" | grep -qxF "$d" && printf 'cask\t%s\t%s\t%s\n' "$c" "$d" "$(cver "$d")"
+  done
 done <<<"$casks" >> "$payload"
 
 # Each outdated Mac App Store app is a standalone self node: display a slugified name + the
