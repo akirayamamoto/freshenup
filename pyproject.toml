@@ -5,10 +5,25 @@ description = "Pick outdated Homebrew and Mac App Store items to upgrade or unin
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Akira Yamamoto" }]
+keywords = ["homebrew", "mas", "cli", "macos", "updates"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Software Distribution",
+]
 dependencies = ["pydantic>=2"]
 
 [project.scripts]
 freshenup = "freshenup.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/akirayamamoto/freshenup"
+Repository = "https://github.com/akirayamamoto/freshenup"
+Issues = "https://github.com/akirayamamoto/freshenup/issues"
 
 [dependency-groups]
 dev = ["ruff>=0.10", "pyright>=1.1", "pytest>=8"]

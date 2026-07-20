@@ -1,0 +1,19 @@
+name: Publish
+
+# Cut a GitHub Release to publish that version to PyPI. Release from a green main —
+# this workflow builds and publishes, it does not re-run the CI gate.
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # mint the short-lived OIDC token for PyPI Trusted Publishing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8
+      - run: uv build
+      - run: uv publish --trusted-publishing always
