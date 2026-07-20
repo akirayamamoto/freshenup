@@ -1,0 +1,37 @@
+[project]
+name = "freshenup"
+version = "3.0.0"
+description = "Pick outdated Homebrew and Mac App Store items to upgrade or uninstall"
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = ["pydantic>=2"]
+
+[project.scripts]
+freshenup = "freshenup.cli:main"
+
+[dependency-groups]
+dev = ["ruff>=0.10", "pyright>=1.1", "pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/freshenup"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

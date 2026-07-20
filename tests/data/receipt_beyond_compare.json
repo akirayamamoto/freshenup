@@ -1,0 +1,6 @@
+{
+  "runtime_dependencies": {},
+  "uninstall_artifacts": [
+    {"app": ["Beyond Compare.app"]}
+  ]
+}

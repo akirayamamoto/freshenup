@@ -24,9 +24,22 @@ freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at
 
 ## Dependencies
 
-- [`fzf`](https://github.com/junegunn/fzf) (installed automatically via Homebrew)
-- Homebrew, plus standard `awk`/`comm` (present on macOS)
+- [`fzf`](https://github.com/junegunn/fzf) — the interactive picker (installed automatically via Homebrew)
+- Python 3.14+ and [`pydantic`](https://docs.pydantic.dev) (bundled by the Homebrew install)
+- Homebrew
 - Optional: [`mas`](https://github.com/mas-cli/mas) for Mac App Store support (detected at runtime)
+
+## Development
+
+Managed with [`uv`](https://docs.astral.sh/uv/); lint/format with Ruff, type-checked with pyright (strict).
+
+```bash
+uv sync              # create the venv and install deps
+uv run pytest        # run tests
+uv run ruff check    # lint
+uv run ruff format   # format
+uv run pyright       # type-check (strict)
+```
 
 ## License
 

@@ -1,0 +1,13 @@
+{
+  "runtime_dependencies": {
+    "cask": [
+      {"full_name": "microsoft-auto-update", "version": "4.76", "declared_directly": true}
+    ]
+  },
+  "uninstall_artifacts": [
+    {"launchctl": "com.microsoft.autoupdate.helper"},
+    {"pkgutil": ["com.microsoft.package.Microsoft_Word.app"]},
+    {"quit": "com.microsoft.Word"},
+    {"app": ["Microsoft Word.app"]}
+  ]
+}
