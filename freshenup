@@ -97,6 +97,12 @@ awk -F'\t' '
 # ~1KB local read, no brew calls. ponytail: one dep level, covers the wrapper pattern.
 caskroom="${HOMEBREW_PREFIX:-$(dirname "$(dirname "$(command -v brew)")")}/Caskroom"
 cver() { awk -F'\t' -v n="$1" '$1==n{print $2}' "$vmap"; }
+cask_apps() {  # installed .app bundle name(s) for a cask, from its receipt's uninstall_artifacts
+  awk -F'"' '
+    $0 ~ /"app"[[:space:]]*:/ { inapp=1; next }
+    inapp && /\]/ { inapp=0; next }
+    inapp && NF>=2 { print $2 }' "$caskroom/$1/.metadata/INSTALL_RECEIPT.json" 2>/dev/null
+}
 cdeps="$(while read -r c; do
   [ -z "$c" ] && continue
   awk -F'"' '/"full_name":/ { d = $4; sub(/.*\//, "", d); print c "\t" d }' \
@@ -179,6 +185,34 @@ else
   mpkgs="$(printf '%s' "$mpkgs" | sed '/^$/d' | sort -u)"
   # shellcheck disable=SC2086
   [ -n "$fpkgs" ] && brew upgrade --formula $fpkgs
+  # A cask whose installed .app is owned by another user (typically root, after a vendor
+  # self-updater reinstalled it) can't be upgraded by brew without sudo — brew would `sudo cp`
+  # the bundle, which fails non-interactively (e.g. under topgrade) and which freshenup never
+  # does. Detect those up front (ownership, not `-w`: App Management protection makes `-w`
+  # report false even for your own apps) and per cask offer to chown it back to you or skip it.
+  if [ -n "$cpkgs" ]; then
+    me="$(id -un)"; ok=""
+    while read -r c; do
+      [ -z "$c" ] && continue
+      root_app=""
+      while read -r app; do
+        p="/Applications/$app"; [ -e "$p" ] || continue
+        # ponytail: owner-based (updaters root the whole bundle); group-writable edge unhandled.
+        [ "$(stat -f '%Su' "$p")" != "$me" ] && root_app="$p"
+      done < <(cask_apps "$c")
+      if [ -z "$root_app" ]; then ok="$ok$c"$'\n'; continue; fi
+      o="$(stat -f '%Su' "$root_app")"
+      printf '%s is owned by %s — brew needs sudo to upgrade it. chown to you first? [y/N] ' \
+        "$c" "$o" > /dev/tty
+      read -r ans < /dev/tty || ans=""
+      case "$ans" in
+        y|Y) sudo chown -R "$me:admin" "$root_app" && ok="$ok$c"$'\n' \
+               || echo "  chown failed; skipped $c" > /dev/tty ;;
+        *)   echo "  skipped $c (owned by $o)" > /dev/tty ;;
+      esac
+    done <<<"$cpkgs"
+    cpkgs="$(printf '%s' "$ok" | sed '/^$/d' | sort -u)"
+  fi
   # shellcheck disable=SC2086
   [ -n "$cpkgs" ] && brew upgrade --cask $cpkgs
   # shellcheck disable=SC2086
