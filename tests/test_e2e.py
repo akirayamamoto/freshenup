@@ -20,10 +20,20 @@ pytestmark = pytest.mark.e2e
 def test_scan_against_real_brew_is_well_formed() -> None:
     # Read-only (no `brew update`). Whatever brew reports, our parsers must yield well-formed
     # Items — this is the one thing fixtures can't catch: brew changing its output format.
-    scan = system.scan(refresh=False, has_mas=False)
+    scan = system.scan(refresh=False, has_mas=False, has_mise=False)
     assert isinstance(scan.leaves, set)
     for item in (*scan.formulae, *scan.casks):
         assert item.name and item.current and item.latest
+
+
+@pytest.mark.skipif(shutil.which("mise") is None, reason="needs mise")
+def test_mise_scan_against_real_mise_is_well_formed() -> None:
+    # Global-only (`-C /`). Whatever mise reports, the parser must yield well-formed Items — guards
+    # against mise changing its `outdated --json` shape.
+    scan = system.scan(refresh=False, has_mas=False, has_mise=True)
+    for item in scan.mise:
+        assert item.kind is Kind.MISE
+        assert item.name and item.latest
 
 
 def test_preview_subprocess_round_trips() -> None:

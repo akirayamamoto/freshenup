@@ -63,14 +63,26 @@ def _missing_tools(which: Callable[[str], str | None]) -> list[str]:
 
 def _gather(*, refresh: bool) -> list[Node]:
     has_mas = shutil.which("mas") is not None
-    kinds = "formulae, casks, and App Store apps" if has_mas else "formulae and casks"
-    print(f"Scanning for outdated {kinds}…", file=sys.stderr)
-    scanned = system.scan(refresh=refresh, has_mas=has_mas)
+    has_mise = shutil.which("mise") is not None
+    print(f"Scanning for outdated {_kinds_label(has_mas, has_mise)}…", file=sys.stderr)
+    scanned = system.scan(refresh=refresh, has_mas=has_mas, has_mise=has_mise)
     return [
         *build_formula_nodes(scanned.formulae, scanned.leaves, system.uses),
         *collapse_casks(scanned.casks, system.deps_of),
         *_mas_nodes(scanned.mas),
+        *_mise_nodes(scanned.mise),
     ]
+
+
+def _kinds_label(has_mas: bool, has_mise: bool) -> str:
+    kinds = ["formulae", "casks"]
+    if has_mas:
+        kinds.append("App Store apps")
+    if has_mise:
+        kinds.append("mise tools")
+    if len(kinds) == 2:
+        return " and ".join(kinds)
+    return f"{', '.join(kinds[:-1])}, and {kinds[-1]}"
 
 
 def _mas_nodes(apps: list[Item]) -> list[Node]:
@@ -85,6 +97,12 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+def _mise_nodes(tools: list[Item]) -> list[Node]:
+    # mise tool ids are already unique and human-readable, so each is its own flat node — no slug
+    # and no dependency folding (unlike formulae/casks).
+    return [Node(kind=Kind.MISE, name=tool.name, itself=tool) for tool in tools]
+
+
 def _items(node: Node) -> list[Item]:
     items = list(node.members)
     if node.itself is not None:
@@ -97,23 +115,27 @@ class _Targets:
     formulae: list[str]
     casks: list[str]
     mas_ids: list[str]
+    mise: list[str]
 
 
 def _route(nodes: list[Node]) -> _Targets:
     """Split selected nodes' items into deduped upgrade lists by kind (App Store apps route by
-    numeric id, formulae and casks by name)."""
+    numeric id; formulae, casks, and mise tools by name)."""
     formulae: list[str] = []
     casks: list[str] = []
     mas_ids: list[str] = []
+    mise: list[str] = []
     for node in nodes:
         for item in _items(node):
             if item.kind is Kind.CASK:
                 casks.append(item.name)
             elif item.kind is Kind.MAS:
                 mas_ids.append(item.mas_id)
+            elif item.kind is Kind.MISE:
+                mise.append(item.name)
             else:
                 formulae.append(item.name)
-    return _Targets(_unique(formulae), _unique(casks), _unique(mas_ids))
+    return _Targets(_unique(formulae), _unique(casks), _unique(mas_ids), _unique(mise))
 
 
 def _update(nodes: list[Node]) -> None:
@@ -121,6 +143,7 @@ def _update(nodes: list[Node]) -> None:
     system.upgrade(Kind.FORMULA, targets.formulae)
     _upgrade_casks(targets.casks)
     system.upgrade(Kind.MAS, targets.mas_ids)
+    system.upgrade(Kind.MISE, targets.mise)
 
 
 def _upgrade_casks(tokens: list[str]) -> None:
@@ -151,6 +174,9 @@ def _upgrade_casks(tokens: list[str]) -> None:
 
 
 def _uninstall(node: Node) -> None:
+    if node.kind is Kind.MISE:
+        print(f"  {node.name}: uninstall mise tools with mise directly", file=sys.stderr)
+        return
     if not _confirm(f"Uninstall {node.name} ({node.kind.value})? [y/N] "):
         print(f"  skipped {node.name}", file=sys.stderr)
         return

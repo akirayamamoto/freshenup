@@ -18,10 +18,11 @@ from functools import cache
 from pathlib import Path
 
 from .models import Item, Kind
-from .parse import parse_brew_outdated, parse_mas, parse_receipt
+from .parse import parse_brew_outdated, parse_mas, parse_mise, parse_receipt
 
 _BREW = "brew"
 _MAS = "mas"
+_MISE = "mise"
 _APPS = Path("/Applications")
 
 
@@ -40,24 +41,29 @@ class Scan:
     formulae: list[Item]
     casks: list[Item]
     mas: list[Item]
+    mise: list[Item]
     leaves: set[str]
 
 
-def scan(*, refresh: bool, has_mas: bool) -> Scan:
+def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
     if refresh:
         print("Refreshing Homebrew…", flush=True)
         subprocess.run([_BREW, "update"], stdout=subprocess.DEVNULL)
     # brew's per-call startup is ~2.5s, so run the independent lookups concurrently.
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=5) as pool:
         formulae = pool.submit(_capture, _BREW, "outdated", "--formula", "--verbose")
         casks = pool.submit(_capture, _BREW, "outdated", "--cask", "--verbose")
         leaves = pool.submit(_capture, _BREW, "leaves", "--installed-on-request")
         mas = pool.submit(_capture, _MAS, "outdated", "--json") if has_mas else None
+        # `-C /` scopes mise to the global config, ignoring any project mise.toml in the cwd.
+        mise = pool.submit(_capture, _MISE, "outdated", "-C", "/", "--json") if has_mise else None
     mas_text = mas.result().strip() if mas is not None else ""
+    mise_text = mise.result().strip() if mise is not None else ""
     return Scan(
         formulae=parse_brew_outdated(Kind.FORMULA, formulae.result()),
         casks=parse_brew_outdated(Kind.CASK, casks.result()),
         mas=parse_mas(mas_text) if mas_text else [],
+        mise=parse_mise(mise_text) if mise_text else [],
         leaves=set(leaves.result().split()),
     )
 
@@ -137,6 +143,8 @@ def upgrade(kind: Kind, names: list[str]) -> None:
         return
     if kind is Kind.MAS:
         subprocess.run(["sudo", _MAS, "upgrade", *names])
+    elif kind is Kind.MISE:
+        subprocess.run([_MISE, "upgrade", "-C", "/", *names])
     else:
         flag = "--cask" if kind is Kind.CASK else "--formula"
         subprocess.run([_BREW, "upgrade", flag, *names])

@@ -10,10 +10,16 @@ class Kind(Enum):
     FORMULA = "formula"
     CASK = "cask"
     MAS = "mas"
+    MISE = "mise"
 
     @property
     def label(self) -> str:
-        return {Kind.FORMULA: "(formula)", Kind.CASK: "(cask)", Kind.MAS: "(App Store)"}[self]
+        return {
+            Kind.FORMULA: "(formula)",
+            Kind.CASK: "(cask)",
+            Kind.MAS: "(App Store)",
+            Kind.MISE: "(mise)",
+        }[self]
 
 
 @dataclass(frozen=True, slots=True)

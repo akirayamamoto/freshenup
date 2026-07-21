@@ -1,0 +1,5 @@
+{
+  "pnpm": {"name": "pnpm", "requested": "latest", "current": "11.15.0", "bump": null, "latest": "11.15.1", "source": {"type": "mise.toml", "path": "/x/config.toml"}},
+  "npm:@google/gemini-cli": {"name": "npm:@google/gemini-cli", "requested": "latest", "current": "0.51.0", "bump": null, "latest": "0.52.0", "source": {"type": "mise.toml", "path": "/x/config.toml"}},
+  "node": {"name": "node", "requested": "lts", "current": null, "bump": null, "latest": "24.19.0", "source": {"type": "mise.toml", "path": "/x/config.toml"}}
+}

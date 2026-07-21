@@ -60,6 +60,23 @@ def parse_mas(text: str) -> list[Item]:
     ]
 
 
+class _MiseTool(BaseModel):
+    current: str | None = None
+    latest: str
+
+
+_MISE_TOOLS = TypeAdapter(dict[str, _MiseTool])
+
+
+def parse_mise(text: str) -> list[Item]:
+    # `mise outdated --json` is an object keyed by tool id; that key is what `mise upgrade` takes
+    # (npm-backed ids like "npm:@scope/pkg" included), so it — not any inner field — is the name.
+    return [
+        Item(kind=Kind.MISE, name=name, current=tool.current or "", latest=tool.latest)
+        for name, tool in _MISE_TOOLS.validate_json(text).items()
+    ]
+
+
 class _Dep(BaseModel):
     full_name: str
 

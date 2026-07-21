@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from freshenup.models import Kind
-from freshenup.parse import parse_brew_outdated, parse_mas, parse_receipt
+from freshenup.parse import parse_brew_outdated, parse_mas, parse_mise, parse_receipt
 
 DATA = Path(__file__).parent / "data"
 
@@ -41,6 +41,19 @@ def test_mas_parses_and_coerces_id_to_str() -> None:
 def test_mas_missing_version_defaults_empty() -> None:
     by_name = {i.name: i for i in parse_mas(_read("mas.json"))}
     assert by_name["NoVersionApp"].current == ""
+
+
+def test_mise_parses_dict_keyed_by_tool_id() -> None:
+    by_name = {i.name: i for i in parse_mise(_read("mise-outdated.json"))}
+    assert by_name["pnpm"].kind is Kind.MISE
+    assert (by_name["pnpm"].current, by_name["pnpm"].latest) == ("11.15.0", "11.15.1")
+    # npm-backed ids keep their full "npm:@scope/pkg" form (that's the `mise upgrade` target)
+    assert by_name["npm:@google/gemini-cli"].latest == "0.52.0"
+
+
+def test_mise_null_current_defaults_empty() -> None:
+    by_name = {i.name: i for i in parse_mise(_read("mise-outdated.json"))}
+    assert by_name["node"].current == ""
 
 
 def test_receipt_populated_deps_and_app() -> None:

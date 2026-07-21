@@ -1,8 +1,8 @@
 # freshenup
 
-Pick outdated Homebrew formulae and casks — and, optionally, outdated Mac App Store apps — from an `fzf` menu, then upgrade or uninstall them.
+Pick outdated Homebrew formulae and casks — and, optionally, outdated Mac App Store apps and [`mise`](https://mise.jdx.dev) tools — from an `fzf` menu, then upgrade or uninstall them.
 
-A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask or App Store app is a standalone node. Everything starts selected. Keys are shown in the `fzf` header. App Store rows show a slugified name; the numeric id drives the action via `mas` (which needs root, so a `sudo` prompt appears only when an App Store row is selected).
+A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask or App Store app is a standalone node. Everything starts selected. Keys are shown in the `fzf` header. App Store rows show a slugified name; the numeric id drives the action via `mas` (which needs root, so a `sudo` prompt appears only when an App Store row is selected). `mise` tools (global config only, via `mise outdated -C /`) are standalone nodes that upgrade within their configured version range; they can't be uninstalled from here.
 
 ## Install
 
@@ -29,6 +29,7 @@ freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at
 - Homebrew
 - Python 3.14+ and [`pydantic`](https://docs.pydantic.dev) (installed automatically with the package)
 - Optional: [`mas`](https://github.com/mas-cli/mas) for Mac App Store support (detected at runtime)
+- Optional: [`mise`](https://mise.jdx.dev) for dev-tool/runtime updates (detected at runtime; global config only)
 
 ## Development
 
