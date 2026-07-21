@@ -1,6 +1,7 @@
 # Releasing
 
-1. Commit to `main`.
-2. Tag and push: `git tag vX.Y.Z && git push --tags` (semver — your call on the bump).
+1. Bump `version` in `pyproject.toml`, run `uv lock`, and commit.
+2. Publish a GitHub Release for the new tag: `gh release create vX.Y.Z --generate-notes`.
 
-The [Homebrew tap](https://github.com/akirayamamoto/homebrew-tap) auto-bumps its formula within a week. To publish immediately, run the **bump** workflow: Actions → bump → Run workflow.
+Publishing the release triggers the **Publish** workflow, which builds the package
+and uploads it to PyPI via OIDC Trusted Publishing.

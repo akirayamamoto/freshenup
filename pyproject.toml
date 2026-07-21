@@ -1,6 +1,6 @@
 [project]
 name = "freshenup"
-version = "3.0.0"
+version = "3.0.1"
 description = "Pick outdated Homebrew and Mac App Store items to upgrade or uninstall"
 readme = "README.md"
 requires-python = ">=3.14"
