@@ -50,3 +50,4 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["e2e: exercises real brew or the installed CLI; needs macOS"]

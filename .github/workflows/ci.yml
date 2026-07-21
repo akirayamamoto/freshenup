@@ -7,13 +7,13 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v8.3.2
         with:
           enable-cache: true
-      - run: uv sync
+      - run: uv sync --locked
       - run: uv run ruff format --check src tests
       - run: uv run ruff check src tests
       - run: uv run pyright src tests
