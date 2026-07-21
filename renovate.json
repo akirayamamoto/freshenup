@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "platformAutomerge": false,
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "packageRules": [
+    {
+      "description": "Full hands-off: auto-merge anything that passes CI",
+      "automerge": true
+    },
+    {
+      "description": "pydantic is the only runtime dep; hold majors — Renovate widens the cap as a PR, the merge is the gate",
+      "matchPackageNames": ["pydantic"],
+      "matchUpdateTypes": ["major"],
+      "rangeStrategy": "widen",
+      "automerge": false
+    }
+  ]
+}
