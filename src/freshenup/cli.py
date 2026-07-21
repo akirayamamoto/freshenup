@@ -138,7 +138,12 @@ def _upgrade_casks(tokens: list[str]) -> None:
         )
         if not _confirm(prompt):
             print(f"  skipped {token} (owned by {owner})", file=sys.stderr)
-        elif system.chown_cask(token, me):
+            continue
+        print(
+            f"  sudo chown {token} back to {me} — {owner} owns it, which blocks brew's upgrade",
+            file=sys.stderr,
+        )
+        if system.chown_cask(token, me):
             approved.append(token)
         else:
             print(f"  chown failed; skipped {token}", file=sys.stderr)
