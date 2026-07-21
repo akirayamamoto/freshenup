@@ -7,12 +7,7 @@
   "automerge": true,
   "packageRules": [
     {
-      "description": "pydantic (only runtime dep): widen the >=2,<3 cap when a new major lands",
-      "matchPackageNames": ["pydantic"],
-      "rangeStrategy": "widen"
-    },
-    {
-      "description": "Hold pydantic majors — Renovate opens the cap-widening PR, the manual merge is the gate",
+      "description": "pydantic is the only runtime dep — hold majors for a manual review; the cap is widened in that PR",
       "matchPackageNames": ["pydantic"],
       "matchUpdateTypes": ["major"],
       "automerge": false
