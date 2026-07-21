@@ -44,6 +44,18 @@ class Selection:
     uninstall: Node | None
 
 
+def _selection_from(stdout: str, by_name: dict[str, Node]) -> Selection | None:
+    """Parse fzf's stdout: the uninstall sentinel plus its highlighted row, or the chosen node
+    names mapped back to nodes. None when nothing usable was selected."""
+    lines = [line for line in stdout.splitlines() if line]
+    if not lines:
+        return None
+    if lines[0] == _UNINSTALL:
+        target = by_name.get(lines[1]) if len(lines) > 1 else None
+        return Selection(nodes=[], uninstall=target)
+    return Selection(nodes=[by_name[line] for line in lines if line in by_name], uninstall=None)
+
+
 def pick(nodes: list[Node]) -> Selection | None:
     """Show the fzf menu; return the chosen nodes (or a single node to uninstall), or None."""
     by_name = {node.name: node for node in nodes}
@@ -78,10 +90,4 @@ def pick(nodes: list[Node]) -> Selection | None:
         os.unlink(payload)
     if proc.returncode != 0:
         return None
-    lines = [line for line in proc.stdout.splitlines() if line]
-    if not lines:
-        return None
-    if lines[0] == _UNINSTALL:
-        target = by_name.get(lines[1]) if len(lines) > 1 else None
-        return Selection(nodes=[], uninstall=target)
-    return Selection(nodes=[by_name[line] for line in lines if line in by_name], uninstall=None)
+    return _selection_from(proc.stdout, by_name)

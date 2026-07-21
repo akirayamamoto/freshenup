@@ -6,6 +6,8 @@ import argparse
 import re
 import shutil
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from . import system
 from .models import Item, Kind, Node
@@ -18,6 +20,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.preview is not None:
         print(preview(args.preview))
         return 0
+    missing = _missing_tools(shutil.which)
+    if missing:
+        for tool in missing:
+            print(f"freshenup needs {tool} — {_REQUIRED_TOOLS[tool]}", file=sys.stderr)
+        return 1
     nodes = _gather(refresh=args.update)
     if not nodes:
         print("Nothing outdated.")
@@ -40,6 +47,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("-u", "--update", action="store_true", help="run `brew update` first")
     parser.add_argument("--preview", metavar="NODE", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
+
+
+# fzf and brew are shelled out to directly; without them freshenup can't run (mas is optional and
+# detected separately). Values are how to install each, shown when it's missing.
+_REQUIRED_TOOLS = {
+    "brew": "install Homebrew from https://brew.sh",
+    "fzf": "run: brew install fzf",
+}
+
+
+def _missing_tools(which: Callable[[str], str | None]) -> list[str]:
+    return [tool for tool in _REQUIRED_TOOLS if which(tool) is None]
 
 
 def _gather(*, refresh: bool) -> list[Node]:
@@ -73,7 +92,16 @@ def _items(node: Node) -> list[Item]:
     return items
 
 
-def _update(nodes: list[Node]) -> None:
+@dataclass(frozen=True, slots=True)
+class _Targets:
+    formulae: list[str]
+    casks: list[str]
+    mas_ids: list[str]
+
+
+def _route(nodes: list[Node]) -> _Targets:
+    """Split selected nodes' items into deduped upgrade lists by kind (App Store apps route by
+    numeric id, formulae and casks by name)."""
     formulae: list[str] = []
     casks: list[str] = []
     mas_ids: list[str] = []
@@ -85,9 +113,14 @@ def _update(nodes: list[Node]) -> None:
                 mas_ids.append(item.mas_id)
             else:
                 formulae.append(item.name)
-    system.upgrade(Kind.FORMULA, _unique(formulae))
-    _upgrade_casks(_unique(casks))
-    system.upgrade(Kind.MAS, _unique(mas_ids))
+    return _Targets(_unique(formulae), _unique(casks), _unique(mas_ids))
+
+
+def _update(nodes: list[Node]) -> None:
+    targets = _route(nodes)
+    system.upgrade(Kind.FORMULA, targets.formulae)
+    _upgrade_casks(targets.casks)
+    system.upgrade(Kind.MAS, targets.mas_ids)
 
 
 def _upgrade_casks(tokens: list[str]) -> None:
