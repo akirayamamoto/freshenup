@@ -4,16 +4,17 @@
   "platformAutomerge": false,
   "minimumReleaseAge": "7 days",
   "internalChecksFilter": "strict",
+  "automerge": true,
   "packageRules": [
     {
-      "description": "Full hands-off: auto-merge anything that passes CI",
-      "automerge": true
+      "description": "pydantic (only runtime dep): widen the >=2,<3 cap when a new major lands",
+      "matchPackageNames": ["pydantic"],
+      "rangeStrategy": "widen"
     },
     {
-      "description": "pydantic is the only runtime dep; hold majors — Renovate widens the cap as a PR, the merge is the gate",
+      "description": "Hold pydantic majors — Renovate opens the cap-widening PR, the manual merge is the gate",
       "matchPackageNames": ["pydantic"],
       "matchUpdateTypes": ["major"],
-      "rangeStrategy": "widen",
       "automerge": false
     }
   ]
