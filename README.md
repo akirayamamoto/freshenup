@@ -7,7 +7,8 @@ A formula node is a top-level (leaf) formula that is outdated itself or has outd
 ## Install
 
 ```bash
-brew install akirayamamoto/tap/freshenup
+uv tool install freshenup   # install, or `uvx freshenup` to run without installing
+uv tool upgrade freshenup   # update
 ```
 
 ## Usage
