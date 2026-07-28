@@ -36,6 +36,15 @@ def test_mise_scan_against_real_mise_is_well_formed() -> None:
         assert item.name and item.latest
 
 
+@pytest.mark.skipif(shutil.which("mas") is None, reason="needs mas")
+def test_mas_scan_against_real_mas_is_well_formed() -> None:
+    # Real `mas outdated --json` is NDJSON (one object per line); the parser must handle any count.
+    scan = system.scan(refresh=False, has_mas=True, has_mise=False)
+    for item in scan.mas:
+        assert item.kind is Kind.MAS
+        assert item.name and item.latest and item.mas_id.isdigit()
+
+
 def test_preview_subprocess_round_trips() -> None:
     # Exercises the real entry point + pydantic TypeAdapter read path, exactly as fzf calls it.
     node = Node(

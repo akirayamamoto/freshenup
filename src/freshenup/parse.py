@@ -50,13 +50,12 @@ class _MasApp(BaseModel):
     latest: str = Field(alias="newVersion")
 
 
-_MAS_APPS = TypeAdapter(list[_MasApp])
-
-
 def parse_mas(text: str) -> list[Item]:
+    # mas 7's `outdated --json` emits NDJSON — one JSON object per line, not a JSON array.
+    apps = [_MasApp.model_validate_json(line) for line in text.splitlines() if line.strip()]
     return [
         Item(kind=Kind.MAS, name=a.name, current=a.current, latest=a.latest, mas_id=str(a.adam_id))
-        for a in _MAS_APPS.validate_json(text)
+        for a in apps
     ]
 
 

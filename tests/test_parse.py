@@ -31,15 +31,22 @@ def test_cask_trailing_build_hash_is_stripped() -> None:
     assert (by_name["hashcask"].current, by_name["hashcask"].latest) == ("1.2.3", "1.2.4")
 
 
-def test_mas_parses_and_coerces_id_to_str() -> None:
-    items = parse_mas(_read("mas.json"))
-    assert items[0].kind is Kind.MAS
-    assert items[0].mas_id == "497799835"
-    assert (items[0].current, items[0].latest) == ("15.2", "15.3")
+def test_mas_parses_ndjson_and_coerces_id_to_str() -> None:
+    by_name = {i.name: i for i in parse_mas(_read("mas-outdated.ndjson"))}
+    assert by_name["WhatsApp"].kind is Kind.MAS
+    assert by_name["WhatsApp"].mas_id == "310633997"  # extra Spotlight keys are ignored
+    assert (by_name["WhatsApp"].current, by_name["WhatsApp"].latest) == ("26.28.75", "26.29.73")
+
+
+def test_mas_single_object_is_not_an_array() -> None:
+    # regression: mas returns a lone object (no array) when exactly one app is outdated
+    items = parse_mas('{"adamID":1,"name":"Solo","version":"1.0","newVersion":"2.0"}')
+    assert len(items) == 1
+    assert items[0].mas_id == "1"
 
 
 def test_mas_missing_version_defaults_empty() -> None:
-    by_name = {i.name: i for i in parse_mas(_read("mas.json"))}
+    by_name = {i.name: i for i in parse_mas(_read("mas-outdated.ndjson"))}
     assert by_name["NoVersionApp"].current == ""
 
 
