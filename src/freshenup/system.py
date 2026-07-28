@@ -2,8 +2,8 @@
 
 Thin by design — the logic lives in the pure parse/nodes functions; this module just shells out
 and wires their injected lookups (``uses``, ``deps_of``, ``apps_of``, ``owner_of``) to real
-queries. The one pure function here, ``blocked_casks``, takes its filesystem access injected so
-it is unit-tested without touching ``/Applications``.
+queries. The pure functions here, ``blocked_casks`` and ``unindexed_apps``, take their filesystem
+and Spotlight data as arguments so they are unit-tested without touching ``/Applications``.
 """
 
 from __future__ import annotations
@@ -23,7 +23,10 @@ from .parse import parse_brew_outdated, parse_mas, parse_mise, parse_receipt
 _BREW = "brew"
 _MAS = "mas"
 _MISE = "mise"
+_MDFIND = "/usr/bin/mdfind"
+_MDIMPORT = "/usr/bin/mdimport"
 _APPS = Path("/Applications")
+_MAS_RECEIPT = Path("Contents") / "_MASReceipt" / "receipt"
 
 
 def current_user() -> str:
@@ -158,3 +161,47 @@ def uninstall(kind: Kind, name: str, mas_id: str = "") -> None:
             subprocess.run(["sudo", _MAS, "uninstall", mas_id])
     elif subprocess.run([_BREW, "uninstall", "--formula", name]).returncode == 0:
         subprocess.run([_BREW, "autoremove"])
+
+
+def installed_mas_apps() -> list[str]:
+    """App bundles carrying an App Store receipt — how mas decides an app came from the Store."""
+    return [
+        str(app)
+        for folder in (_APPS, _APPS / "Utilities")
+        for app in folder.glob("*.app")
+        if (app / _MAS_RECEIPT).exists()
+    ]
+
+
+def spotlight_indexed_apps() -> list[str]:
+    return _capture(_MDFIND, "-onlyin", str(_APPS), "kMDItemAppStoreAdamID == '*'").splitlines()
+
+
+def unindexed_apps(installed: Iterable[str], indexed: Iterable[str]) -> list[str]:
+    """Installed App Store apps that Spotlight holds no App Store metadata for. Matched on bundle
+    name, not full path: Spotlight reports ``/System/Volumes/Data/Applications`` while the
+    filesystem walk reports the ``/Applications`` firmlink."""
+    indexed_names = {Path(path).name for path in indexed}
+    return sorted(path for path in installed if Path(path).name not in indexed_names)
+
+
+def refresh_mas_index() -> None:
+    """Reindex App Store apps Spotlight has lost. mas warns about these and only repairs them
+    after it exits, so doing it here is what keeps the next scan quiet."""
+    indexed = spotlight_indexed_apps()
+    if not indexed:  # query failed or Spotlight is off — can't tell what is genuinely missing
+        return
+    reindex(unindexed_apps(installed_mas_apps(), indexed))
+
+
+def reindex(paths: list[str]) -> None:
+    """Queue a Spotlight re-import and return immediately — mdimport hands the paths to the mds
+    daemon, which finishes after freshenup exits."""
+    if not paths:
+        return
+    subprocess.Popen(
+        [_MDIMPORT, *paths],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )

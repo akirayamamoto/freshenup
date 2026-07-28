@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -34,6 +35,17 @@ def test_mise_scan_against_real_mise_is_well_formed() -> None:
     for item in scan.mise:
         assert item.kind is Kind.MISE
         assert item.name and item.latest
+
+
+@pytest.mark.skipif(shutil.which("mas") is None, reason="needs mas")
+def test_installed_mas_apps_are_real_receipt_bundles() -> None:
+    installed = system.installed_mas_apps()
+    for path in installed:
+        assert Path(path).is_dir()
+        assert (Path(path) / "Contents" / "_MASReceipt" / "receipt").exists()
+    # whatever Spotlight reports, the mismatch can only ever be a subset of what is installed
+    missing = system.unindexed_apps(installed, system.spotlight_indexed_apps())
+    assert set(missing) <= set(installed)
 
 
 @pytest.mark.skipif(shutil.which("mas") is None, reason="needs mas")

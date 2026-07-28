@@ -66,6 +66,8 @@ def _gather(*, refresh: bool) -> list[Node]:
     has_mise = shutil.which("mise") is not None
     print(f"Scanning for outdated {_kinds_label(has_mas, has_mise)}…", file=sys.stderr)
     scanned = system.scan(refresh=refresh, has_mas=has_mas, has_mise=has_mise)
+    if has_mas:
+        system.refresh_mas_index()
     return [
         *build_formula_nodes(scanned.formulae, scanned.leaves, system.uses),
         *collapse_casks(scanned.casks, system.deps_of),
