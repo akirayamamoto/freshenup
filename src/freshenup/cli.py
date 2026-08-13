@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from . import system
 from .models import Item, Kind, Node
-from .nodes import build_formula_nodes, collapse_casks
+from .nodes import build_formula_nodes, collapse_casks, explain_ride_alongs
 from .pick import pick, preview
 
 
@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     if selection.uninstall is not None:
         _uninstall(selection.uninstall)
     else:
-        _update(selection.nodes)
+        _update(selection.nodes, deselected=len(selection.nodes) < len(nodes))
     return 0
 
 
@@ -140,12 +140,24 @@ def _route(nodes: list[Node]) -> _Targets:
     return _Targets(_unique(formulae), _unique(casks), _unique(mas_ids), _unique(mise))
 
 
-def _update(nodes: list[Node]) -> None:
+def _update(nodes: list[Node], *, deselected: bool) -> None:
     targets = _route(nodes)
+    if deselected:
+        _report_ride_alongs(nodes, targets.formulae)
     system.upgrade(Kind.FORMULA, targets.formulae)
     _upgrade_casks(targets.casks)
     system.upgrade(Kind.MAS, targets.mas_ids)
     system.upgrade(Kind.MISE, targets.mise)
+
+
+def _report_ride_alongs(nodes: list[Node], formulae: list[str]) -> None:
+    """Name the formulae brew will upgrade beyond what was picked, before it starts."""
+    extras = sorted(set(system.dry_run_formulae(formulae)) - set(formulae))
+    if not extras:
+        return
+    lines = explain_ride_alongs(nodes, set(formulae), extras, system.formula_deps(extras))
+    for line in lines:
+        print(f"  {line}", file=sys.stderr)
 
 
 def _upgrade_casks(tokens: list[str]) -> None:

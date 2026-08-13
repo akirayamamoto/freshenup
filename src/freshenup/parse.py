@@ -10,7 +10,7 @@ import re
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-from .models import Item, Kind
+from .models import Deps, Item, Kind
 
 # brew outdated --verbose lines: "name (1.0, 1.1) < 1.2" (formula), "name (1.0) != 1.2" (cask).
 # A cask version can carry a comma-suffix that is part of the version (e.g. dotnet
@@ -102,3 +102,34 @@ def parse_receipt(text: str) -> tuple[list[str], list[str]]:
     deps = [dep.full_name.rsplit("/", 1)[-1] for dep in receipt.runtime_dependencies.cask]
     apps = [name for artifact in receipt.uninstall_artifacts for name in artifact.app]
     return deps, apps
+
+
+class _InstalledFormula(BaseModel):
+    # A formula's runtime_dependencies is a flat list, unlike a cask receipt's cask/formula object.
+    runtime_dependencies: list[_Dep] = []
+
+
+class _FormulaInfo(BaseModel):
+    full_name: str
+    dependencies: list[str] = []
+    installed: list[_InstalledFormula] = []
+
+
+class _BrewInfo(BaseModel):
+    formulae: list[_FormulaInfo] = []
+
+
+def parse_formula_deps(text: str) -> dict[str, Deps]:
+    """Dependencies per formula from `brew info --json=v2`, keyed by tap-qualified name — the same
+    name brew prints, so it matches what an upgrade was asked for."""
+    return {
+        formula.full_name: Deps(
+            declared=frozenset(formula.dependencies),
+            runtime=frozenset(
+                dep.full_name
+                for installed in formula.installed
+                for dep in installed.runtime_dependencies
+            ),
+        )
+        for formula in _BrewInfo.model_validate_json(text).formulae
+    }

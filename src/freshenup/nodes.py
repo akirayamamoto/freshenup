@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from .models import Item, Kind, Node
+from .models import Deps, Item, Kind, Node
 
 
 def build_formula_nodes(
@@ -38,6 +38,41 @@ def build_formula_nodes(
         )
         for name in names
     ]
+
+
+def explain_ride_alongs(
+    selected: Iterable[Node],
+    targets: set[str],
+    extras: Iterable[str],
+    deps: dict[str, Deps],
+) -> list[str]:
+    """One line per formula brew upgrades without being asked to. Deselecting such a formula does
+    nothing on its own: brew upgrades the outdated dependents of everything it is given, so the row
+    that carries the dependency has to go too — which is the row each line names."""
+    lines: list[str] = []
+    for extra in extras:
+        culprits = _culprits(deps.get(extra), targets)
+        carriers = sorted(node.name for node in selected if _carries(node, culprits))
+        if not carriers:
+            lines.append(f"Also upgrading {extra} — brew rebuilds it alongside your selection.")
+            continue
+        lines.append(
+            f"Also upgrading {extra} — pulled in by {', '.join(sorted(culprits))} "
+            f"because you selected {', '.join(carriers)}."
+        )
+    return lines
+
+
+def _culprits(deps: Deps | None, targets: set[str]) -> set[str]:
+    """What in the selection drags a ride-along in: its own declared dependencies where those
+    explain it, else its installed closure, which reaches dependencies further down."""
+    if deps is None:
+        return set()
+    return set(deps.declared & targets) or set(deps.runtime & targets)
+
+
+def _carries(node: Node, culprits: set[str]) -> bool:
+    return bool(culprits & {node.name, *(member.name for member in node.members)})
 
 
 def collapse_casks(

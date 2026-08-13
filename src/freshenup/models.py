@@ -34,6 +34,15 @@ class Item:
 
 
 @dataclass(frozen=True, slots=True)
+class Deps:
+    """A formula's dependencies: the ones it declares, and the flattened closure it was installed
+    against — the closure also covers dependencies further down than the declared list reaches."""
+
+    declared: frozenset[str]
+    runtime: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
 class Node:
     """One fzf row: a top-level package, optionally its own outdated Item (`itself`), plus any
     outdated members folded under it — a formula's outdated dependencies, or casks folded under a

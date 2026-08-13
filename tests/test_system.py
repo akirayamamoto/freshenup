@@ -20,6 +20,17 @@ def popen_calls(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     return calls
 
 
+def test_empty_dry_run_never_reaches_brew(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `brew upgrade --dry-run` with no names reports every outdated formula, which would read back
+    # as the whole list riding along
+    def fail(*_args: str) -> str:
+        raise AssertionError("brew must not run without names")
+
+    monkeypatch.setattr(system, "_capture", fail)
+    assert system.dry_run_formulae([]) == []
+    assert system.formula_deps([]) == {}
+
+
 def test_unindexed_ignores_firmlink_path_form() -> None:
     # regression: comparing raw paths marks every app missing, since Spotlight reports the
     # /System/Volumes/Data form while the filesystem walk reports the /Applications firmlink

@@ -17,8 +17,14 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-from .models import Item, Kind
-from .parse import parse_brew_outdated, parse_mas, parse_mise, parse_receipt
+from .models import Deps, Item, Kind
+from .parse import (
+    parse_brew_outdated,
+    parse_formula_deps,
+    parse_mas,
+    parse_mise,
+    parse_receipt,
+)
 
 _BREW = "brew"
 _MAS = "mas"
@@ -74,6 +80,21 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
 def uses(name: str) -> list[str]:
     """Installed formulae that depend on ``name`` (recursively)."""
     return _capture(_BREW, "uses", "--installed", "--recursive", name).split()
+
+
+def dry_run_formulae(names: list[str]) -> list[str]:
+    """Formulae `brew upgrade` would actually touch when given ``names`` — more than asked for,
+    since brew also upgrades outdated dependents. An empty list means every outdated formula to
+    brew, so it never reaches the command."""
+    if not names:
+        return []
+    text = _capture(_BREW, "upgrade", "--formula", "--dry-run", *names)
+    return [line.split()[0] for line in text.splitlines() if line and not line.startswith("==>")]
+
+
+def formula_deps(names: list[str]) -> dict[str, Deps]:
+    text = _capture(_BREW, "info", "--json=v2", *names) if names else ""
+    return parse_formula_deps(text) if text else {}
 
 
 @cache
