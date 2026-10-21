@@ -3,7 +3,12 @@
 from collections.abc import Callable
 
 from freshenup.models import Deps, Item, Kind, Node
-from freshenup.nodes import build_formula_nodes, collapse_casks, explain_ride_alongs
+from freshenup.nodes import (
+    build_formula_nodes,
+    collapse_casks,
+    dependents_lookup,
+    explain_ride_alongs,
+)
 
 
 def _item(name: str, kind: Kind = Kind.FORMULA) -> Item:
@@ -113,3 +118,12 @@ def test_dependency_not_outdated_is_ignored() -> None:
     assert len(nodes) == 1
     assert nodes[0].name == "microsoft-word"
     assert nodes[0].members == ()  # auto-update isn't outdated → not folded in
+
+
+def test_dependents_lookup_inverts_runtime_deps() -> None:
+    uses = dependents_lookup(
+        {"mpv": _deps([], ["ffmpeg", "libass"]), "yt-dlp": _deps([], ["ffmpeg"])}
+    )
+    assert sorted(uses("ffmpeg")) == ["mpv", "yt-dlp"]
+    assert uses("libass") == ["mpv"]
+    assert uses("unused") == []

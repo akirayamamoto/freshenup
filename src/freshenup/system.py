@@ -1,7 +1,7 @@
 """I/O shell: run brew/mas, scan concurrently, and act on selections.
 
 Thin by design — the logic lives in the pure parse/nodes functions; this module just shells out
-and wires their injected lookups (``uses``, ``deps_of``, ``apps_of``, ``owner_of``) to real
+and wires their injected lookups (``deps_of``, ``apps_of``, ``owner_of``) to real
 queries. The pure functions here, ``blocked_casks`` and ``unindexed_apps``, take their filesystem
 and Spotlight data as arguments so they are unit-tested without touching ``/Applications``.
 """
@@ -52,6 +52,7 @@ class Scan:
     mas: list[Item]
     mise: list[Item]
     leaves: set[str]
+    installed_deps: dict[str, Deps]
 
 
 def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
@@ -59,10 +60,11 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
         print("Refreshing Homebrew…", flush=True)
         subprocess.run([_BREW, "update"], stdout=subprocess.DEVNULL)
     # brew's per-call startup is ~2.5s, so run the independent lookups concurrently.
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         formulae = pool.submit(_capture, _BREW, "outdated", "--formula", "--verbose")
         casks = pool.submit(_capture, _BREW, "outdated", "--cask", "--verbose")
         leaves = pool.submit(_capture, _BREW, "leaves", "--installed-on-request")
+        installed_deps = pool.submit(installed_formula_deps)
         mas = pool.submit(_capture, _MAS, "outdated", "--json") if has_mas else None
         # `-C /` scopes mise to the global config, ignoring any project mise.toml in the cwd.
         mise = pool.submit(_capture, _MISE, "outdated", "-C", "/", "--json") if has_mise else None
@@ -74,12 +76,15 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
         mas=parse_mas(mas_text) if mas_text else [],
         mise=parse_mise(mise_text) if mise_text else [],
         leaves=set(leaves.result().split()),
+        installed_deps=installed_deps.result(),
     )
 
 
-def uses(name: str) -> list[str]:
-    """Installed formulae that depend on ``name`` (recursively)."""
-    return _capture(_BREW, "uses", "--installed", "--recursive", name).split()
+def installed_formula_deps() -> dict[str, Deps]:
+    """Dependencies of every installed formula in one `brew info` call — inverting this answers
+    "who uses X?" at once; a `brew uses` per formula pays brew's startup every time."""
+    text = _capture(_BREW, "info", "--json=v2", "--installed")
+    return parse_formula_deps(text) if text else {}
 
 
 def dry_run_formulae(names: list[str]) -> list[str]:

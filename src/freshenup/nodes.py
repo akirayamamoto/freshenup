@@ -11,6 +11,16 @@ from collections.abc import Callable, Iterable
 from .models import Deps, Item, Kind, Node
 
 
+def dependents_lookup(installed: dict[str, Deps]) -> Callable[[str], list[str]]:
+    """Invert installed formulae's (already recursive) runtime dependencies into a `uses` lookup:
+    formula name → the installed formulae that depend on it."""
+    dependents: dict[str, list[str]] = {}
+    for name, deps in installed.items():
+        for dep in deps.runtime:
+            dependents.setdefault(dep, []).append(name)
+    return lambda name: dependents.get(name, [])
+
+
 def build_formula_nodes(
     outdated: list[Item],
     leaves: set[str],

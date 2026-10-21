@@ -11,7 +11,12 @@ from dataclasses import dataclass
 
 from . import system
 from .models import Item, Kind, Node
-from .nodes import build_formula_nodes, collapse_casks, explain_ride_alongs
+from .nodes import (
+    build_formula_nodes,
+    collapse_casks,
+    dependents_lookup,
+    explain_ride_alongs,
+)
 from .pick import pick, preview
 
 
@@ -69,7 +74,9 @@ def _gather(*, refresh: bool) -> list[Node]:
     if has_mas:
         system.refresh_mas_index()
     return [
-        *build_formula_nodes(scanned.formulae, scanned.leaves, system.uses),
+        *build_formula_nodes(
+            scanned.formulae, scanned.leaves, dependents_lookup(scanned.installed_deps)
+        ),
         *collapse_casks(scanned.casks, system.deps_of),
         *_mas_nodes(scanned.mas),
         *_mise_nodes(scanned.mise),
