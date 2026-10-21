@@ -6,9 +6,18 @@ A formula node is a top-level (leaf) formula that is outdated itself or has outd
 
 ## Install
 
+**From PyPI** (released versions):
+
 ```bash
-uv tool install freshenup   # install, or `uvx freshenup` to run without installing
+uv tool install freshenup   # install
 uv tool upgrade freshenup   # update
+uvx freshenup               # or run once without installing
+```
+
+**From a local checkout** (runs your working copy; edits apply immediately):
+
+```bash
+uv tool install --force --editable /path/to/freshenup
 ```
 
 ## Usage
