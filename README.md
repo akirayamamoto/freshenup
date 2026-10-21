@@ -35,13 +35,13 @@ freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at
 
 ## Notes: what and why
 
-The preview pane shows **what** each package is and **why** it's installed. Rows with a why note are marked `ⓘ`. Notes live in `~/.config/freshenup/notes.toml` (override with `FRESHENUP_NOTES`), one table per package, keyed by the name the menu shows:
+The preview pane shows **what** each package is and **why** it's installed. Rows with a why note are marked `ⓘ`. Notes live in `~/.config/freshenup/notes.toml` (override with `FRESHENUP_NOTES`), one table per package grouped by source (`brew`, `cask`, `mas`, `mise`), keyed by the formula/cask/tool name or the App Store app's name. Other sources in the file are ignored, so it can be shared with other tooling.
 
 ```toml
-[coreutils]
+[brew.coreutils]
 why = "timeout for scripts"
 
-["npm:@google/gemini-cli"]
+[mise."npm:@google/gemini-cli"]
 what = "Google's Gemini CLI"   # optional for Homebrew: brew's description is used
 why = "brew formula deprecated"
 ```

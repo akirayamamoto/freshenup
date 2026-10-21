@@ -12,8 +12,11 @@ def _node(name: str) -> Node:
 
 
 def test_parse_notes_reads_what_and_why() -> None:
-    notes = parse_notes('[coreutils]\nwhy = "timeout"\n\n["npm:x"]\nwhat = "X CLI"\nwhy = "mise"\n')
-    assert notes == {"coreutils": Note(why="timeout"), "npm:x": Note(what="X CLI", why="mise")}
+    text = '[brew.coreutils]\nwhy = "timeout"\n\n[mise."npm:x"]\nwhat = "X CLI"\nwhy = "mise"\n'
+    assert parse_notes(text) == {
+        "brew": {"coreutils": Note(why="timeout")},
+        "mise": {"npm:x": Note(what="X CLI", why="mise")},
+    }
 
 
 def test_parse_descriptions_covers_formulae_and_casks() -> None:
@@ -25,7 +28,7 @@ def test_parse_descriptions_covers_formulae_and_casks() -> None:
 
 
 def test_annotate_prefers_note_what_over_brew_description() -> None:
-    notes = {"go": Note(why="toolchain"), "uv": Note(what="mine", why="tools")}
+    notes = {"brew": {"go": Note(why="toolchain"), "uv": Note(what="mine", why="tools")}}
     go, uv, jq = annotate([_node("go"), _node("uv"), _node("jq")], notes, {"go": "Go", "uv": "uv"})
     assert (go.what, go.why) == ("Go", "toolchain")
     assert (uv.what, uv.why) == ("mine", "tools")
@@ -36,3 +39,13 @@ def test_preview_shows_what_and_why_separately() -> None:
     lines = render_preview(Node(kind=Kind.FORMULA, name="go", what="Go", why="toolchain"))
     assert "What: Go" in lines and "Why:  toolchain" in lines
     assert "no note" in render_preview(_node("jq"))
+
+
+def test_annotate_finds_app_store_notes_by_real_name() -> None:
+    app = Item(kind=Kind.MAS, name="Victory", current="1", latest="2", mas_id="123")
+    (node,) = annotate(
+        [Node(kind=Kind.MAS, name="victory", itself=app)],
+        {"mas": {"Victory": Note(why="telemetry")}, "brew": {"victory": Note(why="wrong")}},
+        {},
+    )
+    assert node.why == "telemetry"

@@ -18,7 +18,7 @@ from .nodes import (
     dependents_lookup,
     explain_ride_alongs,
 )
-from .notes import Note, load_notes, notes_path
+from .notes import Note, Notes, load_notes, notes_path
 from .pick import pick, preview
 
 
@@ -86,12 +86,23 @@ def _gather(*, refresh: bool) -> list[Node]:
     return annotate(nodes, load_notes(notes_path()), scanned.descriptions)
 
 
-def annotate(nodes: list[Node], notes: dict[str, Note], descriptions: dict[str, str]) -> list[Node]:
+# The notes file's source names, which match its other consumers rather than freshenup's Kinds.
+_NOTE_SOURCES = {Kind.FORMULA: "brew", Kind.CASK: "cask", Kind.MAS: "mas", Kind.MISE: "mise"}
+
+
+def _note_name(node: Node) -> str:
+    # App Store rows show a slug; the notes file uses the app's real name.
+    if node.kind is Kind.MAS and node.itself is not None:
+        return node.itself.name
+    return node.name
+
+
+def annotate(nodes: list[Node], notes: Notes, descriptions: dict[str, str]) -> list[Node]:
     """Attach what/why from the notes file; brew's description fills in a missing what."""
     empty = Note()
 
     def with_note(node: Node) -> Node:
-        note = notes.get(node.name, empty)
+        note = notes.get(_NOTE_SOURCES[node.kind], {}).get(_note_name(node), empty)
         what = note.what or descriptions.get(node.name, "")
         return replace(node, what=what, why=note.why)
 
