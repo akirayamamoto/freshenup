@@ -34,7 +34,7 @@ freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at
 
 ## Dependencies
 
-- [`fzf`](https://github.com/junegunn/fzf) 0.53+ — the interactive picker (`brew install fzf`)
+- [`fzf`](https://github.com/junegunn/fzf) 0.60+ — the interactive picker (`brew install fzf`)
 - Homebrew
 - Python 3.14+ and [`pydantic`](https://docs.pydantic.dev) (installed automatically with the package)
 - Optional: [`mas`](https://github.com/mas-cli/mas) for Mac App Store support (detected at runtime)

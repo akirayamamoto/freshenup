@@ -2,7 +2,7 @@
 """Tests for the fzf payload round-trip, preview rendering, and selection parsing."""
 
 from freshenup.models import Item, Kind, Node
-from freshenup.pick import _PAYLOAD, _UNINSTALL, _selection_from, render_preview
+from freshenup.pick import _PAYLOAD, _UNINSTALL, _selection_from, render_preview, row_label
 
 
 def _formula(name: str) -> Item:
@@ -77,3 +77,12 @@ def test_selection_filters_unknown_lines() -> None:
     sel = _selection_from("mpv\nbogus\n", by_name)
     assert sel is not None
     assert [n.name for n in sel.nodes] == ["mpv"]
+
+
+def test_row_label_tags_dependency_only_rows() -> None:
+    itself = Node(kind=Kind.FORMULA, name="mpv", itself=_formula("mpv"))
+    both = Node(kind=Kind.FORMULA, name="mpv", itself=_formula("mpv"), members=(_formula("x"),))
+    deps_only = Node(kind=Kind.FORMULA, name="yta", members=(_formula("a"), _formula("b")))
+    assert row_label(itself, 5) == "mpv    1.0 → 1.1"
+    assert "1.0 → 1.1" in row_label(both, 5) and "+1 deps" in row_label(both, 5)
+    assert "deps only (2)" in row_label(deps_only, 5) and "→" not in row_label(deps_only, 5)

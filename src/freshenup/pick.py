@@ -18,6 +18,25 @@ _PAYLOAD = TypeAdapter(list[Node])
 _ENV_PAYLOAD = "FRESHENUP_PAYLOAD"
 _UNINSTALL = "%%UNINSTALL%%"
 _HEADER = "enter=update  ctrl-x=uninstall highlighted  tab=toggle  ctrl-t=invert"
+_DIM_YELLOW = "\x1b[2;33m"
+_RESET = "\x1b[0m"
+
+
+def row_label(node: Node, width: int) -> str:
+    """The row fzf displays: name, its own version bump, and a dim tag for outdated dependencies
+    so a dependency-only row reads differently from the package itself being outdated."""
+    bump = f"{node.itself.current} → {node.itself.latest}" if node.itself is not None else ""
+    deps = len(node.members)
+    if not deps:
+        tag = ""
+    elif node.itself is None:
+        tag = f"deps only ({deps})"
+    else:
+        tag = f"+{deps} deps"
+    label = f"{node.name:<{width}}  {bump}"
+    if tag:
+        label += f"{'  ' if bump else ''}{_DIM_YELLOW}{tag}{_RESET}"
+    return label.rstrip()
 
 
 def render_preview(node: Node) -> str:
@@ -62,12 +81,20 @@ def pick(nodes: list[Node]) -> Selection | None:
     with tempfile.NamedTemporaryFile("wb", suffix=".json", delete=False) as tmp:
         tmp.write(_PAYLOAD.dump_json(nodes))
         payload = tmp.name
-    preview_cmd = f"{shlex.quote(sys.executable)} -m freshenup --preview {{}}"
+    preview_cmd = f"{shlex.quote(sys.executable)} -m freshenup --preview {{1}}"
+    width = max(len(name) for name in by_name)
     try:
         proc = subprocess.run(
             [
                 "fzf",
                 "-m",
+                "--ansi",
+                "--delimiter",
+                "\t",
+                "--with-nth",
+                "2",
+                "--accept-nth",
+                "1",
                 "--bind",
                 "ctrl-t:toggle-all",
                 "--bind",
@@ -79,7 +106,9 @@ def pick(nodes: list[Node]) -> Selection | None:
                 "--preview-window",
                 "right,55%",
             ],
-            input="\n".join(sorted(by_name)),
+            input="\n".join(
+                f"{name}\t{row_label(by_name[name], width)}" for name in sorted(by_name)
+            ),
             text=True,
             stdout=subprocess.PIPE,
             env={**os.environ, _ENV_PAYLOAD: payload},
