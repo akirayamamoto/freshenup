@@ -185,6 +185,10 @@ def uninstall(kind: Kind, name: str, mas_id: str = "") -> None:
     elif kind is Kind.MAS:
         if mas_id:
             subprocess.run(["sudo", _MAS, "uninstall", mas_id])
+    elif kind is Kind.MISE:
+        # `mise uninstall` leaves the global config entry, so mise would just reinstall it;
+        # `unuse` drops the entry and prunes the installation.
+        subprocess.run([_MISE, "unuse", "--global", name])
     elif subprocess.run([_BREW, "uninstall", "--formula", name]).returncode == 0:
         subprocess.run([_BREW, "autoremove"])
 

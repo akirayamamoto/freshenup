@@ -195,9 +195,6 @@ def _upgrade_casks(tokens: list[str]) -> None:
 
 
 def _uninstall(node: Node) -> None:
-    if node.kind is Kind.MISE:
-        print(f"  {node.name}: uninstall mise tools with mise directly", file=sys.stderr)
-        return
     if not _confirm(f"Uninstall {node.name} ({node.kind.value})? [y/N] "):
         print(f"  skipped {node.name}", file=sys.stderr)
         return
