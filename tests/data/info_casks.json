@@ -1,0 +1,118 @@
+{
+  "formulae": [],
+  "casks": [
+    {
+      "token": "tailscale-app",
+      "name": [
+        "Tailscale"
+      ],
+      "desc": "Mesh VPN based on WireGuard",
+      "version": "1.104.2",
+      "auto_updates": true,
+      "artifacts": [
+        {
+          "uninstall": [
+            {
+              "quit": "io.tailscale.ipn.macsys"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "token": "warp",
+      "name": [
+        "Warp"
+      ],
+      "desc": "Rust-based terminal",
+      "version": "0.2026.10.14.08.27.stable_02",
+      "auto_updates": true,
+      "artifacts": [
+        {
+          "app": [
+            "Warp.app"
+          ],
+          "target": "/Applications/Warp.app"
+        }
+      ]
+    },
+    {
+      "token": "marked-app",
+      "name": [
+        "Marked"
+      ],
+      "desc": "Previewer for Markdown, MultiMarkdown and other text markup languages",
+      "version": "3.2.23,1241",
+      "auto_updates": true,
+      "artifacts": [
+        {
+          "uninstall": [
+            {
+              "quit": "com.brettterpstra.marked"
+            }
+          ]
+        },
+        {
+          "app": [
+            "Marked.app"
+          ],
+          "target": "/Applications/Marked.app"
+        }
+      ]
+    },
+    {
+      "token": "microsoft-word",
+      "name": [
+        "Microsoft Word"
+      ],
+      "desc": "Word processor",
+      "version": "16.114.26101123",
+      "auto_updates": true,
+      "artifacts": [
+        {
+          "uninstall": [
+            {
+              "quit": "com.microsoft.autoupdate2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "token": "ddpm",
+      "name": [
+        "DDPM",
+        "Dell Display and Peripheral Manager"
+      ],
+      "desc": "Monitors and peripherals manager",
+      "version": "2.3.0.2004",
+      "auto_updates": null,
+      "artifacts": []
+    },
+    {
+      "token": "jabra-direct",
+      "name": [
+        "Jabra Direct"
+      ],
+      "desc": "Optimise and personalise your Jabra headset",
+      "version": "8.3.26701",
+      "auto_updates": true,
+      "artifacts": [
+        {
+          "uninstall": [
+            {
+              "quit": [
+                "com.jabra.Avaya3Driver",
+                "com.jabra.AvayaDriver",
+                "com.jabra.BriaDriver",
+                "com.jabra.directonline",
+                "com.jabra.softphoneService",
+                "nl.superalloy.oss.terminal-notifier"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

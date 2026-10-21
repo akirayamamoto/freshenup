@@ -7,11 +7,11 @@ import re
 import shutil
 import sys
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 
 from . import system
-from .models import Item, Kind, Node
+from .models import Item, Kind, Node, SelfUpdating
 from .nodes import (
     build_formula_nodes,
     collapse_casks,
@@ -19,6 +19,7 @@ from .nodes import (
     explain_ride_alongs,
 )
 from .notes import Note, Notes, load_notes, notes_path
+from .parse import is_newer
 from .pick import pick, preview
 
 
@@ -81,13 +82,22 @@ def _gather(*, refresh: bool) -> list[Node]:
         ),
         *collapse_casks(scanned.casks, system.deps_of),
         *_mise_nodes(scanned.mise),
+        *app_nodes(
+            scanned.self_updating, {cask.name for cask in scanned.casks}, system.installed_app
+        ),
     ]
     nodes = [*others, *_mas_nodes(scanned.mas, {node.name for node in others})]
     return annotate(nodes, load_notes(notes_path()), scanned.descriptions)
 
 
 # The notes file's source names, which match its other consumers rather than freshenup's Kinds.
-_NOTE_SOURCES = {Kind.FORMULA: "brew", Kind.CASK: "cask", Kind.MAS: "mas", Kind.MISE: "mise"}
+_NOTE_SOURCES = {
+    Kind.FORMULA: "brew",
+    Kind.CASK: "cask",
+    Kind.MAS: "mas",
+    Kind.MISE: "mise",
+    Kind.APP: "cask",
+}
 
 
 def _note_name(node: Node) -> str:
@@ -143,6 +153,29 @@ def _mise_nodes(tools: list[Item]) -> list[Node]:
     return [Node(kind=Kind.MISE, name=tool.name, itself=tool) for tool in tools]
 
 
+def app_nodes(
+    casks: Iterable[SelfUpdating],
+    listed: set[str],
+    installed_app: Callable[[SelfUpdating], system.InstalledApp | None],
+) -> list[Node]:
+    """Self-updating casks whose installed app is behind brew's latest. They are only reported:
+    the app's own updater should install it, since a forced brew upgrade can downgrade an app that
+    has run ahead of the cask. Casks brew already lists as outdated (``listed``) keep their normal
+    row."""
+    nodes: list[Node] = []
+    for cask in casks:
+        if cask.token in listed:
+            continue
+        app = installed_app(cask)
+        if app is None or not is_newer(cask.latest, app.version):
+            continue
+        item = Item(
+            kind=Kind.APP, name=cask.token, current=app.version, latest=cask.latest, app=app.path
+        )
+        nodes.append(Node(kind=Kind.APP, name=cask.token, itself=item))
+    return nodes
+
+
 def _items(node: Node) -> list[Item]:
     items = list(node.members)
     if node.itself is not None:
@@ -156,6 +189,7 @@ class _Targets:
     casks: list[str]
     mas_ids: list[str]
     mise: list[str]
+    apps: list[str]
 
 
 def _route(nodes: list[Node]) -> _Targets:
@@ -165,6 +199,7 @@ def _route(nodes: list[Node]) -> _Targets:
     casks: list[str] = []
     mas_ids: list[str] = []
     mise: list[str] = []
+    apps: list[str] = []
     for node in nodes:
         for item in _items(node):
             if item.kind is Kind.CASK:
@@ -173,9 +208,13 @@ def _route(nodes: list[Node]) -> _Targets:
                 mas_ids.append(item.mas_id)
             elif item.kind is Kind.MISE:
                 mise.append(item.name)
+            elif item.kind is Kind.APP:
+                apps.append(item.app)
             else:
                 formulae.append(item.name)
-    return _Targets(_unique(formulae), _unique(casks), _unique(mas_ids), _unique(mise))
+    return _Targets(
+        _unique(formulae), _unique(casks), _unique(mas_ids), _unique(mise), _unique(apps)
+    )
 
 
 def _update(nodes: list[Node], *, deselected: bool) -> None:
@@ -186,6 +225,9 @@ def _update(nodes: list[Node], *, deselected: bool) -> None:
     _upgrade_casks(targets.casks)
     system.upgrade(Kind.MAS, targets.mas_ids)
     system.upgrade(Kind.MISE, targets.mise)
+    for app in targets.apps:
+        print(f"  {app} updates itself — opening it to install the update", file=sys.stderr)
+        system.open_app(app)
 
 
 def _report_ride_alongs(nodes: list[Node], formulae: list[str]) -> None:

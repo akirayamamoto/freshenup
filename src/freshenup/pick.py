@@ -27,6 +27,7 @@ _SOURCES = {
     Kind.CASK: ("Homebrew app", "\x1b[35m"),
     Kind.MAS: ("App Store", "\x1b[34m"),
     Kind.MISE: ("mise", "\x1b[36m"),
+    Kind.APP: ("Updates itself", "\x1b[32m"),
 }
 _SOURCE_WIDTH = max(len(source) for source, _color in _SOURCES.values())
 _MAX_VERSION_WIDTH = 15

@@ -9,6 +9,7 @@ and Spotlight data as arguments so they are unit-tested without touching ``/Appl
 from __future__ import annotations
 
 import os
+import plistlib
 import pwd
 import subprocess
 from collections.abc import Callable, Iterable
@@ -17,7 +18,7 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-from .models import Deps, Item, Kind
+from .models import Deps, Item, Kind, SelfUpdating
 from .parse import (
     parse_brew_outdated,
     parse_descriptions,
@@ -25,6 +26,7 @@ from .parse import (
     parse_mas,
     parse_mise,
     parse_receipt,
+    parse_self_updating,
 )
 
 _BREW = "brew"
@@ -55,6 +57,7 @@ class Scan:
     leaves: set[str]
     installed_deps: dict[str, Deps]
     descriptions: dict[str, str]
+    self_updating: list[SelfUpdating]
 
 
 def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
@@ -82,6 +85,7 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
         leaves=set(leaves.result().split()),
         installed_deps=parse_formula_deps(installed.result()) if installed.result() else {},
         descriptions=parse_descriptions(installed.result()) if installed.result() else {},
+        self_updating=parse_self_updating(installed.result()) if installed.result() else [],
     )
 
 
@@ -165,6 +169,41 @@ def chown_cask(token: str, me: str) -> bool:
     return ok
 
 
+@dataclass(frozen=True, slots=True)
+class InstalledApp:
+    path: str
+    version: str
+
+
+def installed_app(cask: SelfUpdating) -> InstalledApp | None:
+    """The app bundle a self-updating cask installed, read from the bundle itself — brew's own
+    record goes stale as soon as the app updates itself. A bundle found by id only counts if it is
+    named after the cask: some casks quit a helper (an updater, a driver) rather than their app."""
+    by_id = [
+        path
+        for bundle_id in cask.bundle_ids
+        for path in _capture(_MDFIND, f"kMDItemCFBundleIdentifier == '{bundle_id}'").splitlines()
+        if Path(path).stem in cask.names
+    ]
+    for path in [*cask.app_paths, *by_id]:
+        version = _bundle_version(Path(path))
+        if version:
+            return InstalledApp(path=path, version=version)
+    return None
+
+
+def _bundle_version(app: Path) -> str:
+    plist = app / "Contents" / "Info.plist"
+    if not plist.exists():
+        return ""
+    info = plistlib.loads(plist.read_bytes())
+    return str(info.get("CFBundleShortVersionString") or info.get("CFBundleVersion") or "")
+
+
+def open_app(path: str) -> None:
+    subprocess.run(["open", path])
+
+
 def upgrade(kind: Kind, names: list[str]) -> None:
     if not names:
         return
@@ -178,7 +217,7 @@ def upgrade(kind: Kind, names: list[str]) -> None:
 
 
 def uninstall(kind: Kind, name: str, mas_id: str = "") -> None:
-    if kind is Kind.CASK:
+    if kind in (Kind.CASK, Kind.APP):
         subprocess.run([_BREW, "uninstall", "--cask", name])
     elif kind is Kind.MAS:
         if mas_id:

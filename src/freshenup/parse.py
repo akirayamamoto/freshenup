@@ -10,7 +10,7 @@ import re
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-from .models import Deps, Item, Kind
+from .models import Deps, Item, Kind, SelfUpdating
 
 # brew outdated --verbose lines: "name (1.0, 1.1) < 1.2" (formula), "name (1.0) != 1.2" (cask).
 # A cask version can carry a comma-suffix that is part of the version (e.g. dotnet
@@ -116,9 +116,25 @@ class _FormulaInfo(BaseModel):
     installed: list[_InstalledFormula] = []
 
 
+class _Uninstall(BaseModel):
+    quit: str | list[str] = []
+
+
+class _CaskArtifact(BaseModel):
+    # Like _Artifact, but from `brew info`: an `app` entry sits beside its installed `target`
+    # path, and a {"target": …} item inside `app` renames the bundle.
+    app: list[str | dict[str, str]] = []
+    target: str = ""
+    uninstall: list[_Uninstall] = []
+
+
 class _CaskInfo(BaseModel):
     token: str
     desc: str | None = None
+    name: list[str] = []
+    version: str = ""
+    auto_updates: bool | None = None
+    artifacts: list[_CaskArtifact] = []
 
 
 class _BrewInfo(BaseModel):
@@ -148,3 +164,60 @@ def parse_formula_deps(text: str) -> dict[str, Deps]:
         )
         for formula in _BrewInfo.model_validate_json(text).formulae
     }
+
+
+def parse_self_updating(text: str) -> list[SelfUpdating]:
+    """Installed casks whose app updates itself, from `brew info --json=v2`. A `version :latest`
+    cask has no version to compare, so it is left out."""
+    found: list[SelfUpdating] = []
+    for cask in _BrewInfo.model_validate_json(text).casks:
+        if not cask.auto_updates or cask.version in ("", "latest"):
+            continue
+        apps = [artifact for artifact in cask.artifacts if artifact.app]
+        quits = [
+            quit
+            for artifact in cask.artifacts
+            for uninstall in artifact.uninstall
+            for quit in ([uninstall.quit] if isinstance(uninstall.quit, str) else uninstall.quit)
+        ]
+        found.append(
+            SelfUpdating(
+                token=cask.token,
+                latest=cask.version,
+                names=tuple(cask.name),
+                app_paths=tuple(_app_path(artifact) for artifact in apps),
+                bundle_ids=tuple(quits),
+            )
+        )
+    return found
+
+
+def _app_path(artifact: _CaskArtifact) -> str:
+    if artifact.target:
+        return artifact.target
+    renamed = next((entry["target"] for entry in artifact.app if isinstance(entry, dict)), None)
+    first = artifact.app[0]
+    return f"/Applications/{renamed or first}"
+
+
+_LEADING_NUMBERS = re.compile(r"\d+(?:\.\d+)*")
+
+
+def _numbers(version: str) -> tuple[int, ...]:
+    """The leading dotted numbers of a version, trailing zeros dropped so "1.2" == "1.2.0". A
+    cask's comma suffix and any label ("-latest", "stable_02") are ignored — they are written
+    differently by brew and by the app."""
+    match = _LEADING_NUMBERS.match(version.split(",")[0])
+    if match is None:
+        return ()
+    numbers = [int(part) for part in match.group().split(".")]
+    while numbers and numbers[-1] == 0:
+        numbers.pop()
+    return tuple(numbers)
+
+
+def is_newer(latest: str, installed: str) -> bool:
+    """True when brew's ``latest`` is strictly ahead of the app's own ``installed`` version. An
+    unreadable version on either side is never reported as an update."""
+    want, have = _numbers(latest), _numbers(installed)
+    return bool(want and have) and want > have

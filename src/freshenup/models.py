@@ -11,6 +11,7 @@ class Kind(Enum):
     CASK = "cask"
     MAS = "mas"
     MISE = "mise"
+    APP = "app"
 
     @property
     def label(self) -> str:
@@ -19,18 +20,34 @@ class Kind(Enum):
             Kind.CASK: "(cask)",
             Kind.MAS: "(App Store)",
             Kind.MISE: "(mise)",
+            Kind.APP: "(update in app)",
         }[self]
 
 
 @dataclass(frozen=True, slots=True)
 class Item:
-    """One outdated package and its version bump. `mas_id` is set only for App Store apps."""
+    """One outdated package and its version bump. `mas_id` is set only for App Store apps, `app`
+    (the bundle path) only for self-updating apps."""
 
     kind: Kind
     name: str
     current: str
     latest: str
     mas_id: str = ""
+    app: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SelfUpdating:
+    """A cask whose app updates itself: brew's latest version and where to find the installed
+    bundle — app paths from the cask, else the bundle ids it quits on uninstall. `names` are the
+    cask's app names, which a bundle found by id must match."""
+
+    token: str
+    latest: str
+    names: tuple[str, ...]
+    app_paths: tuple[str, ...]
+    bundle_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
