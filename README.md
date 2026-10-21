@@ -2,7 +2,7 @@
 
 Pick outdated Homebrew formulae and casks — and, optionally, outdated Mac App Store apps and [`mise`](https://mise.jdx.dev) tools — from an `fzf` menu, then upgrade or uninstall them.
 
-A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask or App Store app is a standalone node. Everything starts selected. Keys are shown in the `fzf` header. App Store rows show a slugified name; the numeric id drives the action via `mas` (which needs root, so a `sudo` prompt appears only when an App Store row is selected). `mise` tools (global config only, via `mise outdated -C /`) are standalone nodes that upgrade within their configured version range; they can't be uninstalled from here.
+A formula node is a top-level (leaf) formula that is outdated itself or has outdated dependencies beneath it; a cask or App Store app is a standalone node. Nothing starts selected. Keys are shown in the `fzf` header. App Store rows show a slugified name; the numeric id drives the action via `mas` (which needs root, so a `sudo` prompt appears only when an App Store row is selected). `mise` tools (global config only, via `mise outdated -C /`) are standalone nodes that upgrade within their configured version range; they can't be uninstalled from here.
 
 ## Install
 
@@ -21,7 +21,7 @@ freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at
 - **enter** — upgrade the selected nodes
 - **ctrl-x** — uninstall the highlighted node (confirmed)
 - **tab** — toggle selection
-- **ctrl-t** — invert selection
+- **ctrl-t** — invert selection (selects everything when nothing is selected)
 
 ## Dependencies
 

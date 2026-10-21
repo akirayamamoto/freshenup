@@ -69,8 +69,6 @@ def pick(nodes: list[Node]) -> Selection | None:
                 "fzf",
                 "-m",
                 "--bind",
-                "load:select-all",
-                "--bind",
                 "ctrl-t:toggle-all",
                 "--bind",
                 f"ctrl-x:print({_UNINSTALL})+deselect-all+accept",

@@ -26,7 +26,7 @@ Repository = "https://github.com/akirayamamoto/freshenup"
 Issues = "https://github.com/akirayamamoto/freshenup/issues"
 
 [dependency-groups]
-dev = ["ruff>=0.10", "pyright>=1.1", "pytest>=8"]
+dev = ["ruff>=0.17", "pyright>=1.1.414", "pytest>=9"]
 
 [build-system]
 requires = ["hatchling"]
