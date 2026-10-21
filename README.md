@@ -27,7 +27,8 @@ freshenup          # scan and pick
 freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at most once/24h)
 ```
 
-- **enter** — upgrade the selected nodes
+- **enter** — select the highlighted node
+- **ctrl-s** — upgrade the selected nodes (needs at least one selected)
 - **ctrl-x** — uninstall the highlighted node (confirmed)
 - **tab** — toggle selection
 - **ctrl-t** — invert selection (selects everything when nothing is selected)

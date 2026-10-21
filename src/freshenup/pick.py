@@ -17,7 +17,7 @@ from .models import Kind, Node
 _PAYLOAD = TypeAdapter(list[Node])
 _ENV_PAYLOAD = "FRESHENUP_PAYLOAD"
 _UNINSTALL = "%%UNINSTALL%%"
-_KEYS = "enter=update  ctrl-x=uninstall highlighted  tab=toggle  ctrl-t=invert"
+_KEYS = "enter=select  ctrl-s=update selected  ctrl-x=uninstall highlighted  ctrl-t=invert"
 _DIM = "\x1b[2m"
 _DIM_YELLOW = "\x1b[2;33m"
 _RESET = "\x1b[0m"
@@ -187,6 +187,11 @@ def pick(nodes: list[Node]) -> Selection | None:
                 "2",
                 "--accept-nth",
                 "1",
+                "--bind",
+                "enter:toggle+down",
+                # Updating needs a ticked row; otherwise fzf would accept the highlighted one.
+                "--bind",
+                "ctrl-s:transform:[ $FZF_SELECT_COUNT -gt 0 ] && echo accept",
                 "--bind",
                 "ctrl-t:toggle-all",
                 "--bind",
