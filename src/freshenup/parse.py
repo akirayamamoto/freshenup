@@ -111,12 +111,27 @@ class _InstalledFormula(BaseModel):
 
 class _FormulaInfo(BaseModel):
     full_name: str
+    desc: str | None = None
     dependencies: list[str] = []
     installed: list[_InstalledFormula] = []
 
 
+class _CaskInfo(BaseModel):
+    token: str
+    desc: str | None = None
+
+
 class _BrewInfo(BaseModel):
     formulae: list[_FormulaInfo] = []
+    casks: list[_CaskInfo] = []
+
+
+def parse_descriptions(text: str) -> dict[str, str]:
+    """brew's one-line description per installed formula (tap-qualified) and cask (token)."""
+    info = _BrewInfo.model_validate_json(text)
+    formulae = {f.full_name: f.desc for f in info.formulae if f.desc}
+    casks = {c.token: c.desc for c in info.casks if c.desc}
+    return formulae | casks
 
 
 def parse_formula_deps(text: str) -> dict[str, Deps]:

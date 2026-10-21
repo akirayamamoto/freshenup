@@ -8,7 +8,7 @@ import shutil
 import sys
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from . import system
 from .models import Item, Kind, Node
@@ -18,6 +18,7 @@ from .nodes import (
     dependents_lookup,
     explain_ride_alongs,
 )
+from .notes import Note, load_notes, notes_path
 from .pick import pick, preview
 
 
@@ -81,10 +82,20 @@ def _gather(*, refresh: bool) -> list[Node]:
         *collapse_casks(scanned.casks, system.deps_of),
         *_mise_nodes(scanned.mise),
     ]
-    return [
-        *others,
-        *_mas_nodes(scanned.mas, {node.name for node in others}),
-    ]
+    nodes = [*others, *_mas_nodes(scanned.mas, {node.name for node in others})]
+    return annotate(nodes, load_notes(notes_path()), scanned.descriptions)
+
+
+def annotate(nodes: list[Node], notes: dict[str, Note], descriptions: dict[str, str]) -> list[Node]:
+    """Attach what/why from the notes file; brew's description fills in a missing what."""
+    empty = Note()
+
+    def with_note(node: Node) -> Node:
+        note = notes.get(node.name, empty)
+        what = note.what or descriptions.get(node.name, "")
+        return replace(node, what=what, why=note.why)
+
+    return [with_note(node) for node in nodes]
 
 
 def _kinds_label(has_mas: bool, has_mise: bool) -> str:

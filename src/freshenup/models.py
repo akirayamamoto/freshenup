@@ -52,3 +52,5 @@ class Node:
     name: str
     itself: Item | None = None
     members: tuple[Item, ...] = ()
+    what: str = ""
+    why: str = ""

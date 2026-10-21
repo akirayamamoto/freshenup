@@ -33,6 +33,19 @@ freshenup -u       # force `brew update` first (brew otherwise auto-refreshes at
 - **tab** — toggle selection
 - **ctrl-t** — invert selection (selects everything when nothing is selected)
 
+## Notes: what and why
+
+The preview pane shows **what** each package is and **why** it's installed. Rows with a why note are marked `ⓘ`. Notes live in `~/.config/freshenup/notes.toml` (override with `FRESHENUP_NOTES`), one table per package, keyed by the name the menu shows:
+
+```toml
+[coreutils]
+why = "timeout for scripts"
+
+["npm:@google/gemini-cli"]
+what = "Google's Gemini CLI"   # optional for Homebrew: brew's description is used
+why = "brew formula deprecated"
+```
+
 ## Dependencies
 
 - [`fzf`](https://github.com/junegunn/fzf) 0.60+ — the interactive picker (`brew install fzf`)

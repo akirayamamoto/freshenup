@@ -20,6 +20,7 @@ from pathlib import Path
 from .models import Deps, Item, Kind
 from .parse import (
     parse_brew_outdated,
+    parse_descriptions,
     parse_formula_deps,
     parse_mas,
     parse_mise,
@@ -53,6 +54,7 @@ class Scan:
     mise: list[Item]
     leaves: set[str]
     installed_deps: dict[str, Deps]
+    descriptions: dict[str, str]
 
 
 def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
@@ -64,7 +66,9 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
         formulae = pool.submit(_capture, _BREW, "outdated", "--formula", "--verbose")
         casks = pool.submit(_capture, _BREW, "outdated", "--cask", "--verbose")
         leaves = pool.submit(_capture, _BREW, "leaves", "--installed-on-request")
-        installed_deps = pool.submit(installed_formula_deps)
+        # One `brew info` covers every installed package: inverting its dependencies answers
+        # "who uses X?" for all formulae at once, where a `brew uses` each pays brew's startup.
+        installed = pool.submit(_capture, _BREW, "info", "--json=v2", "--installed")
         mas = pool.submit(_capture, _MAS, "outdated", "--json") if has_mas else None
         # `-C /` scopes mise to the global config, ignoring any project mise.toml in the cwd.
         mise = pool.submit(_capture, _MISE, "outdated", "-C", "/", "--json") if has_mise else None
@@ -76,15 +80,9 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
         mas=parse_mas(mas_text) if mas_text else [],
         mise=parse_mise(mise_text) if mise_text else [],
         leaves=set(leaves.result().split()),
-        installed_deps=installed_deps.result(),
+        installed_deps=parse_formula_deps(installed.result()) if installed.result() else {},
+        descriptions=parse_descriptions(installed.result()) if installed.result() else {},
     )
-
-
-def installed_formula_deps() -> dict[str, Deps]:
-    """Dependencies of every installed formula in one `brew info` call — inverting this answers
-    "who uses X?" at once; a `brew uses` per formula pays brew's startup every time."""
-    text = _capture(_BREW, "info", "--json=v2", "--installed")
-    return parse_formula_deps(text) if text else {}
 
 
 def dry_run_formulae(names: list[str]) -> list[str]:

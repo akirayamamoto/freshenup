@@ -13,6 +13,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from .models import Kind, Node
+from .notes import notes_path
 
 _PAYLOAD = TypeAdapter(list[Node])
 _ENV_PAYLOAD = "FRESHENUP_PAYLOAD"
@@ -54,9 +55,16 @@ def _dimmed(text: str, start: int, end: int) -> _Cell:
     return _Cell(text, f"{text[:start]}{_DIM}{text[start:end]}{_RESET}{text[end:]}")
 
 
-def _name_cell(name: str) -> _Cell:
-    # Dim a tap prefix ("owner/tap/") so the formula's own name stands out.
-    return _dimmed(name, 0, name.rfind("/") + 1)
+_NOTE_MARK = " ⓘ"
+
+
+def _name_cell(node: Node) -> _Cell:
+    # Dim a tap prefix ("owner/tap/") so the formula's own name stands out; ⓘ marks a row whose
+    # preview has a why note.
+    cell = _dimmed(node.name, 0, node.name.rfind("/") + 1)
+    if not node.why:
+        return cell
+    return _Cell(cell.plain + _NOTE_MARK, f"{cell.styled}{_DIM}{_NOTE_MARK}{_RESET}")
 
 
 def _version_cell(version: str) -> _Cell:
@@ -86,7 +94,7 @@ class _Widths:
         current = max((len(item.current) for item in items), default=0)
         latest = max((len(item.latest) for item in items), default=0)
         return _Widths(
-            name=max(len(node.name) for node in nodes),
+            name=max(len(_name_cell(node).plain) for node in nodes),
             current=min(current, _MAX_VERSION_WIDTH),
             latest=min(latest, _MAX_VERSION_WIDTH),
         )
@@ -108,7 +116,7 @@ def row_label(node: Node, widths: _Widths) -> str:
     return _GAP.join(
         [
             _Cell(source, f"{color}{source}{_RESET}").ljust(_SOURCE_WIDTH),
-            _name_cell(node.name).ljust(widths.name),
+            _name_cell(node).ljust(widths.name),
             version,
             f"{_DIM_YELLOW}{updates}{_RESET}" if updates else "",
         ]
@@ -136,8 +144,13 @@ def render_preview(node: Node) -> str:
     if node.itself is not None:
         header += f"  {node.itself.current} → {node.itself.latest}"
     header += f"  {node.kind.label}"
+    what = f"What: {node.what or '—'}"
+    why = f"Why:  {node.why or f'no note — add one to {notes_path()}'}"
     members = [f"  {m.name:<22} {m.current} → {m.latest}" for m in node.members]
-    return "\n".join([header, *members])
+    lines = [header, what, why]
+    if members:
+        lines += ["", "Dependencies updating:", *members]
+    return "\n".join(lines)
 
 
 def preview(name: str) -> str:
