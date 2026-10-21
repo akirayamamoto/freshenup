@@ -12,31 +12,123 @@ from pathlib import Path
 
 from pydantic import TypeAdapter
 
-from .models import Node
+from .models import Kind, Node
 
 _PAYLOAD = TypeAdapter(list[Node])
 _ENV_PAYLOAD = "FRESHENUP_PAYLOAD"
 _UNINSTALL = "%%UNINSTALL%%"
-_HEADER = "enter=update  ctrl-x=uninstall highlighted  tab=toggle  ctrl-t=invert"
+_KEYS = "enter=update  ctrl-x=uninstall highlighted  tab=toggle  ctrl-t=invert"
+_DIM = "\x1b[2m"
 _DIM_YELLOW = "\x1b[2;33m"
 _RESET = "\x1b[0m"
+_SOURCES = {
+    Kind.FORMULA: ("Homebrew", "\x1b[33m"),
+    Kind.CASK: ("Homebrew app", "\x1b[35m"),
+    Kind.MAS: ("App Store", "\x1b[34m"),
+    Kind.MISE: ("mise", "\x1b[36m"),
+}
+_SOURCE_WIDTH = max(len(source) for source, _color in _SOURCES.values())
+_MAX_VERSION_WIDTH = 15
+_UP_TO_DATE = "(up to date)"
+_GAP = "  "
 
 
-def row_label(node: Node, width: int) -> str:
-    """The row fzf displays: name, its own version bump, and a dim tag for outdated dependencies
-    so a dependency-only row reads differently from the package itself being outdated."""
-    bump = f"{node.itself.current} → {node.itself.latest}" if node.itself is not None else ""
-    deps = len(node.members)
-    if not deps:
-        tag = ""
-    elif node.itself is None:
-        tag = f"deps only ({deps})"
+@dataclass(frozen=True, slots=True)
+class _Cell:
+    """Display text with optional ANSI styling; padding is measured on ``plain`` so escape codes
+    don't throw the columns off."""
+
+    plain: str
+    styled: str
+
+    def ljust(self, width: int) -> str:
+        return self.styled + " " * (width - len(self.plain))
+
+    def rjust(self, width: int) -> str:
+        return " " * (width - len(self.plain)) + self.styled
+
+
+def _dimmed(text: str, start: int, end: int) -> _Cell:
+    if start >= end:
+        return _Cell(text, text)
+    return _Cell(text, f"{text[:start]}{_DIM}{text[start:end]}{_RESET}{text[end:]}")
+
+
+def _name_cell(name: str) -> _Cell:
+    # Dim a tap prefix ("owner/tap/") so the formula's own name stands out.
+    return _dimmed(name, 0, name.rfind("/") + 1)
+
+
+def _version_cell(version: str) -> _Cell:
+    # Dim a cask's comma build suffix ("3.9,3.9.0.88839"): kept, but it isn't the version people
+    # recognise.
+    comma = version.find(",")
+    return _dimmed(version, comma, len(version)) if comma > 0 else _Cell(version, version)
+
+
+def _updates(node: Node) -> str:
+    count = len(node.members)
+    if not count:
+        return ""
+    noun = "dependency" if count == 1 else "dependencies"
+    return f"{count} {noun}"
+
+
+@dataclass(frozen=True, slots=True)
+class _Widths:
+    name: int
+    current: int
+    latest: int
+
+    @staticmethod
+    def of(nodes: list[Node]) -> _Widths:
+        items = [node.itself for node in nodes if node.itself is not None]
+        current = max((len(item.current) for item in items), default=0)
+        latest = max((len(item.latest) for item in items), default=0)
+        return _Widths(
+            name=max(len(node.name) for node in nodes),
+            current=min(current, _MAX_VERSION_WIDTH),
+            latest=min(latest, _MAX_VERSION_WIDTH),
+        )
+
+    @property
+    def version(self) -> int:
+        return self.current + len(" → ") + self.latest
+
+
+def row_label(node: Node, widths: _Widths) -> str:
+    """One aligned row: source, name, version bump, and what else updates with it."""
+    source, color = _SOURCES[node.kind]
+    if node.itself is None:
+        version = _Cell(_UP_TO_DATE, f"{_DIM}{_UP_TO_DATE}{_RESET}").ljust(widths.version)
     else:
-        tag = f"+{deps} deps"
-    label = f"{node.name:<{width}}  {bump}"
-    if tag:
-        label += f"{'  ' if bump else ''}{_DIM_YELLOW}{tag}{_RESET}"
-    return label.rstrip()
+        current = _version_cell(node.itself.current).rjust(widths.current)
+        version = f"{current} → {_version_cell(node.itself.latest).ljust(widths.latest)}"
+    updates = _updates(node)
+    return _GAP.join(
+        [
+            _Cell(source, f"{color}{source}{_RESET}").ljust(_SOURCE_WIDTH),
+            _name_cell(node.name).ljust(widths.name),
+            version,
+            f"{_DIM_YELLOW}{updates}{_RESET}" if updates else "",
+        ]
+    ).rstrip()
+
+
+def _header(widths: _Widths) -> str:
+    titles = _GAP.join(
+        [
+            "SOURCE".ljust(_SOURCE_WIDTH),
+            "NAME".ljust(widths.name),
+            "VERSION".ljust(widths.version),
+            "ALSO UPDATES",
+        ]
+    )
+    return f"{_KEYS}\n{titles}"
+
+
+def _sort_key(node: Node) -> tuple[int, str]:
+    return list(Kind).index(node.kind), node.name
 
 
 def render_preview(node: Node) -> str:
@@ -82,7 +174,7 @@ def pick(nodes: list[Node]) -> Selection | None:
         tmp.write(_PAYLOAD.dump_json(nodes))
         payload = tmp.name
     preview_cmd = f"{shlex.quote(sys.executable)} -m freshenup --preview {{1}}"
-    width = max(len(name) for name in by_name)
+    widths = _Widths.of(nodes)
     try:
         proc = subprocess.run(
             [
@@ -100,14 +192,14 @@ def pick(nodes: list[Node]) -> Selection | None:
                 "--bind",
                 f"ctrl-x:print({_UNINSTALL})+deselect-all+accept",
                 "--header",
-                _HEADER,
+                _header(widths),
                 "--preview",
                 preview_cmd,
                 "--preview-window",
                 "right,55%",
             ],
             input="\n".join(
-                f"{name}\t{row_label(by_name[name], width)}" for name in sorted(by_name)
+                f"{node.name}\t{row_label(node, widths)}" for node in sorted(nodes, key=_sort_key)
             ),
             text=True,
             stdout=subprocess.PIPE,

@@ -29,9 +29,9 @@ def test_missing_tools() -> None:
 
 def test_mas_nodes() -> None:
     apps = [Item(kind=Kind.MAS, name="Xcode", current="15.2", latest="15.3", mas_id="497799835")]
-    (node,) = _mas_nodes(apps)
+    (node,) = _mas_nodes(apps, taken=set())
     assert node.kind is Kind.MAS
-    assert node.name == "xcode-835"
+    assert node.name == "xcode"
     assert node.itself is not None
     assert node.itself.mas_id == "497799835"
 
@@ -60,3 +60,9 @@ def test_route_buckets_by_kind_and_dedups() -> None:
     assert targets.casks == ["slack"]
     assert targets.mas_ids == ["497799835"]
     assert targets.mise == ["pnpm"]
+
+
+def test_mas_nodes_suffix_only_on_clash() -> None:
+    apps = [Item(kind=Kind.MAS, name="Slack", current="1", latest="2", mas_id="803453959")]
+    (node,) = _mas_nodes(apps, taken={"slack"})
+    assert node.name == "slack-959"

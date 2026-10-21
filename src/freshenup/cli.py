@@ -6,6 +6,7 @@ import argparse
 import re
 import shutil
 import sys
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -73,13 +74,16 @@ def _gather(*, refresh: bool) -> list[Node]:
     scanned = system.scan(refresh=refresh, has_mas=has_mas, has_mise=has_mise)
     if has_mas:
         system.refresh_mas_index()
-    return [
+    others = [
         *build_formula_nodes(
             scanned.formulae, scanned.leaves, dependents_lookup(scanned.installed_deps)
         ),
         *collapse_casks(scanned.casks, system.deps_of),
-        *_mas_nodes(scanned.mas),
         *_mise_nodes(scanned.mise),
+    ]
+    return [
+        *others,
+        *_mas_nodes(scanned.mas, {node.name for node in others}),
     ]
 
 
@@ -94,12 +98,17 @@ def _kinds_label(has_mas: bool, has_mise: bool) -> str:
     return f"{', '.join(kinds[:-1])}, and {kinds[-1]}"
 
 
-def _mas_nodes(apps: list[Item]) -> list[Node]:
-    # Display a slugified name + the last 3 id digits (near-unique, brew-like); the numeric id in
-    # itself.mas_id drives the action.
-    return [
-        Node(kind=Kind.MAS, name=f"{_slug(app.name)}-{app.mas_id[-3:]}", itself=app) for app in apps
-    ]
+def _mas_nodes(apps: list[Item], taken: set[str]) -> list[Node]:
+    # Display a slugified name; the numeric id in itself.mas_id drives the action. Rows are keyed
+    # by name, so a slug that clashes with another row gets the last 3 id digits appended.
+    slugs = Counter(_slug(app.name) for app in apps)
+
+    def name(app: Item) -> str:
+        slug = _slug(app.name)
+        unique = slugs[slug] == 1 and slug not in taken
+        return slug if unique else f"{slug}-{app.mas_id[-3:]}"
+
+    return [Node(kind=Kind.MAS, name=name(app), itself=app) for app in apps]
 
 
 def _slug(name: str) -> str:

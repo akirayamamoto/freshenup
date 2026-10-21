@@ -1,8 +1,10 @@
 # pyright: reportPrivateUsage=false
 """Tests for the fzf payload round-trip, preview rendering, and selection parsing."""
 
+import re
+
 from freshenup.models import Item, Kind, Node
-from freshenup.pick import _PAYLOAD, _UNINSTALL, _selection_from, render_preview, row_label
+from freshenup.pick import _PAYLOAD, _UNINSTALL, _selection_from, _Widths, render_preview, row_label
 
 
 def _formula(name: str) -> Item:
@@ -79,10 +81,21 @@ def test_selection_filters_unknown_lines() -> None:
     assert [n.name for n in sel.nodes] == ["mpv"]
 
 
-def test_row_label_tags_dependency_only_rows() -> None:
-    itself = Node(kind=Kind.FORMULA, name="mpv", itself=_formula("mpv"))
-    both = Node(kind=Kind.FORMULA, name="mpv", itself=_formula("mpv"), members=(_formula("x"),))
-    deps_only = Node(kind=Kind.FORMULA, name="yta", members=(_formula("a"), _formula("b")))
-    assert row_label(itself, 5) == "mpv    1.0 → 1.1"
-    assert "1.0 → 1.1" in row_label(both, 5) and "+1 deps" in row_label(both, 5)
-    assert "deps only (2)" in row_label(deps_only, 5) and "→" not in row_label(deps_only, 5)
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _rows(nodes: list[Node]) -> list[str]:
+    widths = _Widths.of(nodes)
+    return [_ANSI.sub("", row_label(node, widths)) for node in nodes]
+
+
+def test_row_label_aligns_columns_and_names_dependencies() -> None:
+    nodes = [
+        Node(kind=Kind.FORMULA, name="mpv", itself=_formula("mpv"), members=(_formula("x"),)),
+        Node(kind=Kind.FORMULA, name="tap/yta", members=(_formula("a"), _formula("b"))),
+        Node(kind=Kind.MISE, name="node", itself=Item(Kind.MISE, "node", "24.21.0", "24.22.0")),
+    ]
+    mpv, yta, node = _rows(nodes)
+    assert mpv.startswith("Homebrew ") and mpv.endswith("1 dependency")
+    assert "(up to date)" in yta and yta.endswith("2 dependencies")
+    assert node.startswith("mise ") and node.index("→") == mpv.index("→")
