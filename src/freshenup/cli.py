@@ -228,6 +228,19 @@ def _update(nodes: list[Node], *, deselected: bool) -> None:
     for app in targets.apps:
         print(f"  {app} updates itself — opening it to install the update", file=sys.stderr)
         system.open_app(app)
+    _offer_missing_mise_tools(shutil.which("mise") is not None)
+
+
+def _offer_missing_mise_tools(has_mise: bool) -> None:
+    """Runs after the upgrades, since upgrading mise itself can change what its config resolves
+    to. Asks first: a missing tool can be a new major version (an `lts` alias moving on)."""
+    if not has_mise:
+        return
+    missing = system.missing_mise_tools()
+    if not missing:
+        return
+    if _confirm(f"mise config requests uninstalled {', '.join(missing)}. Install? [y/N] "):
+        system.install_missing_mise_tools()
 
 
 def _report_ride_alongs(nodes: list[Node], formulae: list[str]) -> None:

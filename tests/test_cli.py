@@ -1,11 +1,15 @@
 # pyright: reportPrivateUsage=false
 """Tests for CLI-side pure helpers: slugging, MAS node naming, and upgrade routing."""
 
+import pytest
+
+from freshenup import cli, system
 from freshenup.cli import (
     _REQUIRED_TOOLS,
     _mas_nodes,
     _mise_nodes,
     _missing_tools,
+    _offer_missing_mise_tools,
     _route,
     _slug,
     app_nodes,
@@ -98,3 +102,19 @@ def test_app_nodes_report_only_apps_behind_brew() -> None:
     targets = _route([node])
     assert targets.apps == ["/Applications/behind.app"]
     assert targets.casks == []
+
+
+@pytest.mark.parametrize(("answer", "installs"), [("y", True), ("n", False)])
+def test_missing_mise_tools_install_only_when_confirmed(
+    monkeypatch: pytest.MonkeyPatch, answer: str, installs: bool
+) -> None:
+    installed: list[bool] = []
+    monkeypatch.setattr(system, "missing_mise_tools", lambda: ["node@26.13.1"])
+    monkeypatch.setattr(system, "install_missing_mise_tools", lambda: installed.append(True))
+
+    def confirm(_prompt: str) -> bool:
+        return answer == "y"
+
+    monkeypatch.setattr(cli, "_confirm", confirm)
+    _offer_missing_mise_tools(has_mise=True)
+    assert installed == ([True] if installs else [])

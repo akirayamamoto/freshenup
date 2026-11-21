@@ -76,6 +76,17 @@ def parse_mise(text: str) -> list[Item]:
     ]
 
 
+def parse_mise_missing(text: str) -> list[str]:
+    """tool@version entries from `mise install --dry-run`, one per "would install" line."""
+    return [
+        token
+        for line in text.splitlines()
+        if "would install" in line
+        for token in line.split()
+        if "@" in token
+    ]
+
+
 class _Dep(BaseModel):
     full_name: str
 

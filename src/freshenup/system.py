@@ -25,6 +25,7 @@ from .parse import (
     parse_formula_deps,
     parse_mas,
     parse_mise,
+    parse_mise_missing,
     parse_receipt,
     parse_self_updating,
 )
@@ -214,6 +215,20 @@ def upgrade(kind: Kind, names: list[str]) -> None:
     else:
         flag = "--cask" if kind is Kind.CASK else "--formula"
         subprocess.run([_BREW, "upgrade", flag, *names])
+
+
+def missing_mise_tools() -> list[str]:
+    """Global mise tools the config requests but aren't installed — e.g. after an `lts` alias moves
+    to a new major, which `mise upgrade` never installs because nothing of it is installed yet."""
+    # The dry-run report goes to stderr, not stdout.
+    proc = subprocess.run(
+        [_MISE, "install", "-C", "/", "--dry-run"], capture_output=True, text=True
+    )
+    return parse_mise_missing(proc.stderr) if proc.returncode == 0 else []
+
+
+def install_missing_mise_tools() -> None:
+    subprocess.run([_MISE, "install", "-C", "/"])
 
 
 def uninstall(kind: Kind, name: str, mas_id: str = "") -> None:

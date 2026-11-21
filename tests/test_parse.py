@@ -10,6 +10,7 @@ from freshenup.parse import (
     parse_brew_outdated,
     parse_mas,
     parse_mise,
+    parse_mise_missing,
     parse_receipt,
     parse_self_updating,
 )
@@ -111,3 +112,8 @@ def test_self_updating_casks_and_where_to_find_their_app() -> None:
 )
 def test_is_newer(latest: str, installed: str, newer: bool) -> None:
     assert is_newer(latest, installed) is newer
+
+
+def test_mise_missing_takes_tool_at_version_from_would_install_lines() -> None:
+    text = "mise node@26.13.1                  \u21e2 would install\nmise some other note\n"
+    assert parse_mise_missing(text) == ["node@26.13.1"]
