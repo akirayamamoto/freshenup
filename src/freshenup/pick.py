@@ -13,7 +13,9 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from .models import Kind, Node
+from .nodes import member_tree
 from .notes import notes_path
+from .tree import render_tree
 
 _PAYLOAD = TypeAdapter(list[Node])
 _ENV_PAYLOAD = "FRESHENUP_PAYLOAD"
@@ -147,10 +149,11 @@ def render_preview(node: Node) -> str:
     header += f"  {node.kind.label}"
     what = f"What: {node.what or '—'}"
     why = f"Why:  {node.why or f'no note — add one to {notes_path()}'}"
-    members = [f"  {m.name:<22} {m.current} → {m.latest}" for m in node.members]
     lines = [header, what, why]
-    if members:
-        lines += ["", "Dependencies updating:", *members]
+    if node.members:
+        bumps = {m.name: f"{m.name}  {m.current} → {m.latest}" for m in node.members}
+        tree = render_tree(node.name, member_tree(node), lambda name: bumps.get(name, name))
+        lines += ["", "Dependencies updating:", *tree]
     return "\n".join(lines)
 
 

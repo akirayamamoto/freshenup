@@ -35,7 +35,7 @@ def test_render_preview_with_members() -> None:
     assert "mpv" in out
     assert "1.0 → 1.1" in out
     assert "(formula)" in out
-    assert "ffmpeg" in out
+    assert out.splitlines()[-2:] == ["mpv", "└─ ffmpeg  1.0 → 1.1"]
 
 
 def test_render_preview_dep_only_header_has_no_version() -> None:

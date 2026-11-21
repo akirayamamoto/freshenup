@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from .models import Deps, Item, Kind, Node
+from .models import Deps, Edge, Item, Kind, Node
+from .tree import render_tree
 
 
 def dependents_lookup(installed: dict[str, Deps]) -> Callable[[str], list[str]]:
@@ -25,10 +26,12 @@ def build_formula_nodes(
     outdated: list[Item],
     leaves: set[str],
     uses: Callable[[str], Iterable[str]],
+    installed: dict[str, Deps] | None = None,
 ) -> list[Node]:
     """Group outdated formulae under their leaf (installed-on-request) formula: an outdated leaf
     is its own node; an outdated dependency folds under the leaves that require it (`uses` gives a
-    formula's recursive dependents)."""
+    formula's recursive dependents). ``installed`` nests the folded dependencies under each other
+    for the preview."""
     selves: dict[str, Item] = {}
     member_map: dict[str, list[Item]] = {}
     for item in outdated:
@@ -45,9 +48,44 @@ def build_formula_nodes(
             name=name,
             itself=selves.get(name),
             members=tuple(member_map.get(name, ())),
+            edges=_nesting(name, member_map.get(name, []), installed or {}),
         )
         for name in names
     ]
+
+
+def _nesting(root: str, members: list[Item], installed: dict[str, Deps]) -> tuple[Edge, ...]:
+    """Hang each member under its closest ancestor within the row. A dependency's closure is a
+    subset of its dependents', so among the ancestors that need a member, the one with the
+    smallest closure is the nearest. Not-outdated formulae in between are skipped."""
+    names = [member.name for member in members]
+    edges: list[Edge] = []
+    for member in names:
+        ancestors = [
+            name for name in names if name != member and member in _closure(installed, name)
+        ]
+        if not ancestors:
+            continue
+        nearest = min(ancestors, key=lambda name: (len(_closure(installed, name)), name))
+        edges.append(Edge(parent=nearest, child=member))
+    return tuple(edges)
+
+
+def _closure(installed: dict[str, Deps], name: str) -> frozenset[str]:
+    deps = installed.get(name)
+    return deps.runtime if deps is not None else frozenset()
+
+
+def member_tree(node: Node) -> dict[str, list[str]]:
+    """The row's members as a parent → children map rooted at the row's name."""
+    nested = {edge.child: edge.parent for edge in node.edges}
+    children: dict[str, list[str]] = {}
+    for member in sorted(m.name for m in node.members):
+        children.setdefault(nested.get(member, node.name), []).append(member)
+    return children
+
+
+_UNEXPLAINED = "rebuilt alongside your selection:"
 
 
 def explain_ride_alongs(
@@ -56,20 +94,40 @@ def explain_ride_alongs(
     extras: Iterable[str],
     deps: dict[str, Deps],
 ) -> list[str]:
-    """One line per formula brew upgrades without being asked to. Deselecting such a formula does
-    nothing on its own: brew upgrades the outdated dependents of everything it is given, so the row
-    that carries the dependency has to go too — which is the row each line names."""
-    lines: list[str] = []
-    for extra in extras:
-        culprits = _culprits(deps.get(extra), targets)
-        carriers = sorted(node.name for node in selected if _carries(node, culprits))
-        if not carriers:
-            lines.append(f"Also upgrading {extra} — brew rebuilds it alongside your selection.")
-            continue
-        lines.append(
-            f"Also upgrading {extra} — pulled in by {', '.join(sorted(culprits))} "
-            f"because you selected {', '.join(carriers)}."
-        )
+    """A tree of the formulae brew upgrades without being asked to, grouped by the selected
+    dependency that drags them in. Deselecting such a formula does nothing on its own: brew
+    upgrades the outdated dependents of everything it is given, so the rows that carry the
+    dependency have to go too — which are the rows each group names."""
+    selected = list(selected)
+    by_cause: dict[str, list[str]] = {}
+    carriers_of: dict[str, list[str]] = {}
+    unexplained: list[str] = []
+    for extra in sorted(extras):
+        explained = False
+        for culprit in sorted(_culprits(deps.get(extra), targets)):
+            carriers = sorted(node.name for node in selected if _carries(node, {culprit}))
+            if not carriers:
+                continue
+            carriers_of[culprit] = carriers
+            by_cause.setdefault(culprit, []).append(extra)
+            explained = True
+        if not explained:
+            unexplained.append(extra)
+    count = len({*unexplained, *(extra for pulled in by_cause.values() for extra in pulled)})
+    if not count:
+        return []
+    noun = "package" if count == 1 else "packages"
+    lines = [f"Brew will also upgrade {count} {noun} you didn't pick:"]
+    roots = {
+        culprit: f"{culprit}  ← in your picks via {', '.join(carriers)}"
+        for culprit, carriers in carriers_of.items()
+    }
+    for culprit, pulled in by_cause.items():
+        lines += render_tree(culprit, {culprit: pulled}, lambda name: roots.get(name, name))
+    if unexplained:
+        lines += render_tree(_UNEXPLAINED, {_UNEXPLAINED: unexplained})
+    if by_cause:
+        lines.append("To skip one, deselect the picks named on its branch.")
     return lines
 
 

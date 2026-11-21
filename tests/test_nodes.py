@@ -2,12 +2,13 @@
 
 from collections.abc import Callable
 
-from freshenup.models import Deps, Item, Kind, Node
+from freshenup.models import Deps, Edge, Item, Kind, Node
 from freshenup.nodes import (
     build_formula_nodes,
     collapse_casks,
     dependents_lookup,
     explain_ride_alongs,
+    member_tree,
 )
 
 
@@ -90,8 +91,10 @@ def test_ride_along_names_the_rows_carrying_the_dependency() -> None:
         deps={"opencode": _deps(["node", "ripgrep"])},
     )
     assert lines == [
-        "Also upgrading opencode — pulled in by node "
-        "because you selected agent-browser, playwright-cli."
+        "Brew will also upgrade 1 package you didn't pick:",
+        "node  ← in your picks via agent-browser, playwright-cli",
+        "└─ opencode",
+        "To skip one, deselect the picks named on its branch.",
     ]
 
 
@@ -103,12 +106,16 @@ def test_ride_along_falls_back_to_the_installed_closure() -> None:
         extras=["opencode"],
         deps={"opencode": _deps(["node"], runtime=["node", "libffi"])},
     )
-    assert lines == ["Also upgrading opencode — pulled in by libffi because you selected mpv."]
+    assert lines[1:3] == ["libffi  ← in your picks via mpv", "└─ opencode"]
 
 
 def test_ride_along_without_a_known_cause_still_reports() -> None:
     lines = explain_ride_alongs([_node("mpv")], targets={"mpv"}, extras=["ffmpeg"], deps={})
-    assert lines == ["Also upgrading ffmpeg — brew rebuilds it alongside your selection."]
+    assert lines == [
+        "Brew will also upgrade 1 package you didn't pick:",
+        "rebuilt alongside your selection:",
+        "└─ ffmpeg",
+    ]
 
 
 def test_dependency_not_outdated_is_ignored() -> None:
@@ -127,3 +134,41 @@ def test_dependents_lookup_inverts_runtime_deps() -> None:
     assert sorted(uses("ffmpeg")) == ["mpv", "yt-dlp"]
     assert uses("libass") == ["mpv"]
     assert uses("unused") == []
+
+
+def test_ride_alongs_sharing_a_cause_group_under_it() -> None:
+    lines = explain_ride_alongs(
+        [_node("yta", "ca-certificates")],
+        targets={"yta", "ca-certificates"},
+        extras=["python@3.15", "curl-impersonate"],
+        deps={
+            "python@3.15": _deps(["ca-certificates"]),
+            "curl-impersonate": _deps(["ca-certificates"]),
+        },
+    )
+    assert lines[:4] == [
+        "Brew will also upgrade 2 packages you didn't pick:",
+        "ca-certificates  ← in your picks via yta",
+        "├─ curl-impersonate",
+        "└─ python@3.15",
+    ]
+
+
+def test_members_nest_under_their_nearest_outdated_ancestor() -> None:
+    # yta → python → openssl → ca-certificates; curl (not outdated) sits between, so skipped
+    installed = {
+        "python@3.14": _deps([], ["openssl@4", "ca-certificates"]),
+        "openssl@4": _deps([], ["ca-certificates"]),
+    }
+    outdated = [_item("python@3.14"), _item("openssl@4"), _item("ca-certificates")]
+    uses = _lookup({name.name: ["yta"] for name in outdated})
+    (node,) = build_formula_nodes(outdated, leaves={"yta"}, uses=uses, installed=installed)
+    assert set(node.edges) == {
+        Edge(parent="python@3.14", child="openssl@4"),
+        Edge(parent="openssl@4", child="ca-certificates"),
+    }
+    assert member_tree(node) == {
+        "yta": ["python@3.14"],
+        "python@3.14": ["openssl@4"],
+        "openssl@4": ["ca-certificates"],
+    }

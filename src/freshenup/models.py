@@ -60,14 +60,25 @@ class Deps:
 
 
 @dataclass(frozen=True, slots=True)
+class Edge:
+    """A member hanging directly under ``parent`` (the row itself or another member) in the
+    preview's dependency tree."""
+
+    parent: str
+    child: str
+
+
+@dataclass(frozen=True, slots=True)
 class Node:
     """One fzf row: a top-level package, optionally its own outdated Item (`itself`), plus any
     outdated members folded under it — a formula's outdated dependencies, or casks folded under a
-    cask that depends on them."""
+    cask that depends on them. `edges` nest members under each other; a member without one hangs
+    directly under the row."""
 
     kind: Kind
     name: str
     itself: Item | None = None
     members: tuple[Item, ...] = ()
+    edges: tuple[Edge, ...] = ()
     what: str = ""
     why: str = ""

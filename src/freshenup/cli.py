@@ -78,7 +78,10 @@ def _gather(*, refresh: bool) -> list[Node]:
         system.refresh_mas_index()
     others = [
         *build_formula_nodes(
-            scanned.formulae, scanned.leaves, dependents_lookup(scanned.installed_deps)
+            scanned.formulae,
+            scanned.leaves,
+            dependents_lookup(scanned.installed_deps),
+            scanned.installed_deps,
         ),
         *collapse_casks(scanned.casks, system.deps_of),
         *_mise_nodes(scanned.mise),
