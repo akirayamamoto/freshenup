@@ -43,6 +43,15 @@ def current_user() -> str:
     return pwd.getpwuid(os.getuid()).pw_name
 
 
+def _capture_required(*args: str) -> str:
+    """stdout of a brew scan. A failure here would silently drop rows (no dependents, no leaves),
+    so it stops the run instead."""
+    proc = subprocess.run(args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"`{' '.join(args)}` failed: {proc.stderr.strip()}")
+    return proc.stdout
+
+
 def _capture(*args: str) -> str:
     """stdout of a command, or "" if it fails — scans tolerate a missing or erroring tool."""
     proc = subprocess.run(args, capture_output=True, text=True)
@@ -67,12 +76,12 @@ def scan(*, refresh: bool, has_mas: bool, has_mise: bool) -> Scan:
         subprocess.run([_BREW, "update"], stdout=subprocess.DEVNULL)
     # brew's per-call startup is ~2.5s, so run the independent lookups concurrently.
     with ThreadPoolExecutor(max_workers=6) as pool:
-        formulae = pool.submit(_capture, _BREW, "outdated", "--formula", "--verbose")
-        casks = pool.submit(_capture, _BREW, "outdated", "--cask", "--verbose")
-        leaves = pool.submit(_capture, _BREW, "leaves", "--installed-on-request")
+        formulae = pool.submit(_capture_required, _BREW, "outdated", "--formula", "--verbose")
+        casks = pool.submit(_capture_required, _BREW, "outdated", "--cask", "--verbose")
+        leaves = pool.submit(_capture_required, _BREW, "leaves", "--installed-on-request")
         # One `brew info` covers every installed package: inverting its dependencies answers
         # "who uses X?" for all formulae at once, where a `brew uses` each pays brew's startup.
-        installed = pool.submit(_capture, _BREW, "info", "--json=v2", "--installed")
+        installed = pool.submit(_capture_required, _BREW, "info", "--json=v2", "--installed")
         mas = pool.submit(_capture, _MAS, "outdated", "--json") if has_mas else None
         # `-C /` scopes mise to the global config, ignoring any project mise.toml in the cwd.
         mise = pool.submit(_capture, _MISE, "outdated", "-C", "/", "--json") if has_mise else None

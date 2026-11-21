@@ -13,6 +13,7 @@ from freshenup.cli import (
     _route,
     _slug,
     app_nodes,
+    cask_nodes,
 )
 from freshenup.models import Item, Kind, Node, SelfUpdating
 from freshenup.system import InstalledApp
@@ -81,11 +82,13 @@ def test_mas_nodes_suffix_only_on_clash() -> None:
     assert node.name == "slack-959"
 
 
-def test_app_nodes_report_only_apps_behind_brew() -> None:
+def test_app_nodes_judge_self_updating_casks_by_the_installed_app() -> None:
     def cask(token: str) -> SelfUpdating:
         return SelfUpdating(token=token, latest="2.0", names=(), app_paths=(), bundle_ids=())
 
-    versions = {"behind": "1.9", "current": "2.0", "brew-lists": "1.0"}
+    # brew's record for a self-updating cask goes stale, so even a cask brew lists is judged by
+    # the app on disk
+    versions = {"behind": "1.9", "current": "2.0"}
 
     def installed_app(c: SelfUpdating) -> InstalledApp | None:
         version = versions.get(c.token)
@@ -93,8 +96,11 @@ def test_app_nodes_report_only_apps_behind_brew() -> None:
             return None
         return InstalledApp(path=f"/Applications/{c.token}.app", version=version)
 
-    casks = [cask(t) for t in ("behind", "current", "brew-lists", "not-found")]
-    (node,) = app_nodes(casks, {"brew-lists"}, installed_app)
+    casks = [cask(t) for t in ("behind", "current", "not-found")]
+    rows = app_nodes(casks, installed_app)
+    # found apps replace their brew rows; an app not found keeps its brew row
+    assert rows.found == {"behind", "current"}
+    (node,) = rows.nodes
     assert node.kind is Kind.APP
     assert node.itself is not None
     assert (node.itself.current, node.itself.latest) == ("1.9", "2.0")
@@ -118,3 +124,26 @@ def test_missing_mise_tools_install_only_when_confirmed(
     monkeypatch.setattr(cli, "_confirm", confirm)
     _offer_missing_mise_tools(has_mise=True)
     assert installed == ([True] if installs else [])
+
+
+def test_found_self_updating_cask_loses_its_brew_row() -> None:
+    # brew lists all three; only the app on disk decides for self-updating ones
+    def cask(token: str) -> SelfUpdating:
+        return SelfUpdating(token=token, latest="2.0", names=(), app_paths=(), bundle_ids=())
+
+    versions = {"behind": "1.9", "current": "2.0", "unreadable": "beta"}
+
+    def installed_app(c: SelfUpdating) -> InstalledApp | None:
+        version = versions.get(c.token)
+        return InstalledApp(path=f"/A/{c.token}.app", version=version) if version else None
+
+    listed = [_cask(t) for t in ("behind", "current", "not-found", "unreadable", "slack")]
+    self_updating = [cask(t) for t in ("behind", "current", "not-found", "unreadable")]
+    nodes = cask_nodes(listed, self_updating, installed_app, lambda _token: [])
+    assert {(n.kind, n.name) for n in nodes} == {
+        (Kind.APP, "behind"),
+        (Kind.CASK, "not-found"),
+        # versions that can't be compared keep brew's row rather than vanish
+        (Kind.CASK, "unreadable"),
+        (Kind.CASK, "slack"),
+    }

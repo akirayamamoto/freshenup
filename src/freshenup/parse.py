@@ -22,6 +22,9 @@ _OP = re.compile(r"^\s*(?:<|!=)\s*")
 def parse_brew_outdated(kind: Kind, text: str) -> list[Item]:
     items: list[Item] = []
     for line in text.splitlines():
+        # A pinned package is one the user chose to hold back, and brew refuses to upgrade it.
+        if "[pinned at " in line:
+            continue
         open_paren = line.find(" (")
         if open_paren < 0:
             continue
@@ -225,6 +228,10 @@ def _numbers(version: str) -> tuple[int, ...]:
     while numbers and numbers[-1] == 0:
         numbers.pop()
     return tuple(numbers)
+
+
+def is_readable(version: str) -> bool:
+    return bool(_numbers(version))
 
 
 def is_newer(latest: str, installed: str) -> bool:

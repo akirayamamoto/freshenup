@@ -19,7 +19,7 @@ from .nodes import (
     explain_ride_alongs,
 )
 from .notes import Note, Notes, load_notes, notes_path
-from .parse import is_newer
+from .parse import is_newer, is_readable
 from .pick import pick, preview
 
 
@@ -47,10 +47,26 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def cask_nodes(
+    casks: list[Item],
+    self_updating: Iterable[SelfUpdating],
+    installed_app: Callable[[SelfUpdating], system.InstalledApp | None],
+    deps_of: Callable[[str], Iterable[str]],
+) -> list[Node]:
+    """Cask rows, where a self-updating cask whose app is on disk is judged by that app instead
+    of brew's stale record — so it never also gets a brew row that could downgrade it."""
+    apps = app_nodes(self_updating, installed_app)
+    brew_casks = [cask for cask in casks if cask.name not in apps.found]
+    return [*collapse_casks(brew_casks, deps_of), *apps.nodes]
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="freshenup",
-        description="Pick outdated Homebrew and Mac App Store items to upgrade or uninstall.",
+        description=(
+            "Pick outdated Homebrew, Mac App Store, mise and self-updating app items to upgrade "
+            "or uninstall."
+        ),
     )
     parser.add_argument("-u", "--update", action="store_true", help="run `brew update` first")
     parser.add_argument("--preview", metavar="NODE", help=argparse.SUPPRESS)
@@ -83,11 +99,8 @@ def _gather(*, refresh: bool) -> list[Node]:
             dependents_lookup(scanned.installed_deps),
             scanned.installed_deps,
         ),
-        *collapse_casks(scanned.casks, system.deps_of),
+        *cask_nodes(scanned.casks, scanned.self_updating, system.installed_app, system.deps_of),
         *_mise_nodes(scanned.mise),
-        *app_nodes(
-            scanned.self_updating, {cask.name for cask in scanned.casks}, system.installed_app
-        ),
     ]
     nodes = [*others, *_mas_nodes(scanned.mas, {node.name for node in others})]
     return annotate(nodes, load_notes(notes_path()), scanned.descriptions)
@@ -156,27 +169,38 @@ def _mise_nodes(tools: list[Item]) -> list[Node]:
     return [Node(kind=Kind.MISE, name=tool.name, itself=tool) for tool in tools]
 
 
+@dataclass(frozen=True, slots=True)
+class AppRows:
+    """Rows for self-updating apps that are behind, and every cask whose app was found on disk —
+    those casks' brew rows go, since brew's recorded version is stale once the app updates
+    itself."""
+
+    nodes: list[Node]
+    found: set[str]
+
+
 def app_nodes(
     casks: Iterable[SelfUpdating],
-    listed: set[str],
     installed_app: Callable[[SelfUpdating], system.InstalledApp | None],
-) -> list[Node]:
+) -> AppRows:
     """Self-updating casks whose installed app is behind brew's latest. They are only reported:
     the app's own updater should install it, since a forced brew upgrade can downgrade an app that
-    has run ahead of the cask. Casks brew already lists as outdated (``listed``) keep their normal
-    row."""
+    has run ahead of the cask."""
     nodes: list[Node] = []
+    found: set[str] = set()
     for cask in casks:
-        if cask.token in listed:
-            continue
         app = installed_app(cask)
-        if app is None or not is_newer(cask.latest, app.version):
+        # Unreadable versions can't be compared, so the cask keeps brew's row rather than vanish.
+        if app is None or not (is_readable(cask.latest) and is_readable(app.version)):
+            continue
+        found.add(cask.token)
+        if not is_newer(cask.latest, app.version):
             continue
         item = Item(
             kind=Kind.APP, name=cask.token, current=app.version, latest=cask.latest, app=app.path
         )
         nodes.append(Node(kind=Kind.APP, name=cask.token, itself=item))
-    return nodes
+    return AppRows(nodes=nodes, found=found)
 
 
 def _items(node: Node) -> list[Item]:

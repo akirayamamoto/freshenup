@@ -117,3 +117,8 @@ def test_is_newer(latest: str, installed: str, newer: bool) -> None:
 def test_mise_missing_takes_tool_at_version_from_would_install_lines() -> None:
     text = "mise node@26.13.1                  \u21e2 would install\nmise some other note\n"
     assert parse_mise_missing(text) == ["node@26.13.1"]
+
+
+def test_pinned_formula_is_left_out() -> None:
+    names = {i.name for i in parse_brew_outdated(Kind.FORMULA, _read("outdated_formula.txt"))}
+    assert "pinnedpkg" not in names

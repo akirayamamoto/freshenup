@@ -58,3 +58,13 @@ def test_reindex_skips_when_nothing_missing(popen_calls: list[list[str]]) -> Non
 def test_reindex_queues_mdimport(popen_calls: list[list[str]]) -> None:
     system.reindex(["/Applications/X.app"])
     assert popen_calls == [["/usr/bin/mdimport", "/Applications/X.app"]]
+
+
+def test_failed_brew_scan_stops_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    # an empty result would silently drop every dependency row, so a failure must surface
+    def failing_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad tap")
+
+    monkeypatch.setattr(subprocess, "run", failing_run)
+    with pytest.raises(RuntimeError, match="bad tap"):
+        system.scan(refresh=False, has_mas=False, has_mise=False)
